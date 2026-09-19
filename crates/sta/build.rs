@@ -20,11 +20,15 @@ fn main() {
 }
 
 /// The macOS binary has to be started from an app bundle that carries "Chromium Embedded
-/// Framework.framework" (docs/research/platform.md §6). `cef-dll-sys` finds the prebuilt CEF
-/// through `CEF_PATH` (set by `.cargo/config.toml`) but tells only its own dependents where it
-/// landed, so resolve it here the same way and bake the path into the binary: `mac_bundle.rs`
-/// copies or links the framework from there. An empty value means "not found at build time"; the
-/// bundler then reports it instead of building a bundle that cannot start.
+/// Framework.framework" (docs/research/platform.md §6). `cef-dll-sys` finds — and on a fresh
+/// checkout *downloads* — the prebuilt CEF through `CEF_PATH` (set by `.cargo/config.toml`), and
+/// tells its direct dependents where it landed. `sta` is one of those on macOS for exactly this
+/// reason (Cargo.toml): it makes cargo run that build script before this one, and gives us the
+/// directory as `DEP_CEF_DLL_WRAPPER_CEF_DIR`. Without the ordering this script used to win the
+/// race against the download on a clean machine (every CI run) and find nothing. The path is baked
+/// into the binary: `mac_bundle.rs` copies or links the framework from there. An empty value means
+/// "not found at build time"; the bundler then reports it instead of building a bundle that cannot
+/// start.
 #[cfg(target_os = "macos")]
 fn macos_framework_dir() {
     use std::{env, path::{Path, PathBuf}};
@@ -32,6 +36,10 @@ fn macos_framework_dir() {
     println!("cargo:rerun-if-env-changed=CEF_PATH");
     const FRAMEWORK: &str = "Chromium Embedded Framework.framework";
     let has_framework = |dir: &Path| dir.join(FRAMEWORK).is_dir();
+
+    // What `cef-dll-sys` itself resolved. Scanning `CEF_PATH` below is the fallback for a build
+    // that gets no such variable (a vendored or patched `cef-dll-sys`).
+    let resolved = env::var_os("DEP_CEF_DLL_WRAPPER_CEF_DIR").map(PathBuf::from).filter(|dir| has_framework(dir));
 
     let root = env::var_os("CEF_PATH")
         .map(PathBuf::from)
@@ -43,7 +51,7 @@ fn macos_framework_dir() {
         });
     // `<CEF_PATH>/<cef version>/cef_macos_<arch>/` (the layout cef-dll-sys downloads into), or
     // `<CEF_PATH>/` itself when it points straight at a distribution.
-    let found = root.and_then(|root| {
+    let found = resolved.or_else(|| root.and_then(|root| {
         if has_framework(&root) {
             return Some(root);
         }
@@ -55,8 +63,11 @@ fn macos_framework_dir() {
             }
             std::fs::read_dir(&version).ok()?.flatten().map(|e| e.path()).find(|d| has_framework(d))
         })
-    });
+    }));
     let path = found.and_then(|p| p.canonicalize().ok()).unwrap_or_default();
+    if path.as_os_str().is_empty() {
+        println!("cargo:warning=no {FRAMEWORK} found (DEP_CEF_DLL_WRAPPER_CEF_DIR, CEF_PATH): this binary cannot assemble sta.app");
+    }
     println!("cargo:rustc-env=STA_CEF_DIR={}", path.display());
 }
 

@@ -58,6 +58,9 @@ windows-sys = { workspace = true, features = [
 ] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
+# Not used from Rust: a direct dependency is what makes cargo run its build script before ours and
+# tell `build.rs` where the CEF distribution landed (`DEP_CEF_DLL_WRAPPER_CEF_DIR`).
+cef-dll-sys.workspace = true
 objc2.workspace = true
 objc2-app-kit.workspace = true
 objc2-foundation.workspace = true

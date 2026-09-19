@@ -212,7 +212,7 @@ fn install_framework(target: &Path, copy: bool) -> io::Result<()> {
             // Nothing to install, but what is there already works.
             return Ok(());
         }
-        let hint = if CEF_DIR.is_empty() { "CEF_PATH was not set when this binary was built" } else { CEF_DIR };
+        let hint = if CEF_DIR.is_empty() { "the build found no CEF distribution — see the cargo warning from sta's build script" } else { CEF_DIR };
         return Err(io::Error::other(format!("the CEF framework is not at {} ({hint})", source.display())));
     }
     if is_link {

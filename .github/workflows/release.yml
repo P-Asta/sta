@@ -28,8 +28,12 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
-  # Prebuilt CEF binaries land here (.cargo/config.toml sets the same path for local builds).
-  CEF_PATH: .cef
+  # Prebuilt CEF binaries land here. Deliberately NOT named `CEF_PATH`: .cargo/config.toml sets
+  # that one with `relative = true`, which hands `cef-dll-sys` an absolute path, and a variable
+  # already in the environment wins over cargo's `[env]`. A bare relative `.cef` resolves against
+  # the build script's cwd (the crate's registry checkout) for the download but against the
+  # workspace root for the final link — `LNK1181: cannot open input file 'libcef.lib'`.
+  CEF_DIR: .cef
 
 jobs:
   build:
@@ -61,11 +65,11 @@ jobs:
         with:
           key: ${{ matrix.label }}
 
-      # `cef-dll-sys`'s build script downloads the prebuilt CEF binaries into `$CEF_PATH` the
-      # first time it runs, and Cargo replays its cached output ever after. So the download and
-      # the `target/` cache have to live or die together: a restored `target/` with no `.cef`
-      # next to it links against a `libcef.lib` that was never downloaded
-      # (`LNK1181: cannot open input file 'libcef.lib'`).
+      # `cef-dll-sys`'s build script downloads the prebuilt CEF binaries into `CEF_PATH`
+      # (`<repo>/.cef`, from .cargo/config.toml) the first time it runs, and Cargo replays its
+      # cached output ever after. So the download and the `target/` cache have to live or die
+      # together: a restored `target/` with no `.cef` next to it links against a `libcef.lib`
+      # that was never downloaded.
       - name: Which CEF the workspace pins
         id: cef
         shell: bash
@@ -82,18 +86,18 @@ jobs:
         with:
           # The downloaded archive is only ever unpacked once, so cache the tree and not it.
           path: |
-            ${{ env.CEF_PATH }}
-            !${{ env.CEF_PATH }}/**/*.tar.bz2
+            ${{ env.CEF_DIR }}
+            !${{ env.CEF_DIR }}/**/*.tar.bz2
           key: cef-${{ matrix.label }}-${{ steps.cef.outputs.version }}
 
       - name: Make the build script re-download CEF if it is gone
         shell: bash
         run: |
-          if ls "$CEF_PATH"/*/*/libcef.lib >/dev/null 2>&1 || ls "$CEF_PATH"/*/libcef.lib >/dev/null 2>&1; then
+          if ls "$CEF_DIR"/*/*/libcef.lib >/dev/null 2>&1 || ls "$CEF_DIR"/*/libcef.lib >/dev/null 2>&1; then
             echo "CEF import library is present, leaving the cached build alone"
             exit 0
           fi
-          echo "no libcef.lib under $CEF_PATH — dropping cef-dll-sys so its build script runs again"
+          echo "no libcef.lib under $CEF_DIR — dropping cef-dll-sys so its build script runs again"
           rm -rf target/release/.fingerprint/cef-dll-sys-* target/release/build/cef-dll-sys-*
 
       - uses: actions/setup-node@v4

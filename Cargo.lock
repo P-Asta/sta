@@ -1350,7 +1350,7 @@ dependencies = [
 
 [[package]]
 name = "sta"
-version = "0.1.1"
+version = "0.1.3"
 dependencies = [
  "cef",
  "embed-resource",
@@ -1365,7 +1365,7 @@ dependencies = [
 
 [[package]]
 name = "sta-core"
-version = "0.1.1"
+version = "0.1.3"
 dependencies = [
  "psl",
  "regex",
@@ -1376,7 +1376,7 @@ dependencies = [
 
 [[package]]
 name = "sta-mcp"
-version = "0.1.1"
+version = "0.1.3"
 dependencies = [
  "rmcp",
  "serde",

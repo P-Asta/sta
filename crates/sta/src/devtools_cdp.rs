@@ -92,8 +92,11 @@ pub enum User {
     /// `Runtime.evaluate` ([`worker_evaluate`]).
     Extensions,
     /// "Translate page" (`translate.rs`): reads the page's text out of a tab and writes the
-    /// translation back. `Runtime.evaluate` in the tab's own main world is the whole of it — the
-    /// point is to change what the page renders, so an isolated world would be useless.
+    /// translation back. `Runtime.evaluate` runs in the tab's own main world — the point is to
+    /// change what the page renders, so an isolated world would be useless. `Page.captureScreenshot`
+    /// is how the text *in pictures* is reached: one shot of the viewport, cropped to each image
+    /// here, which sidesteps canvas tainting, hotlink and credential 403s and every image format
+    /// question at once (Chromium has already decoded the picture).
     Translate,
 }
 
@@ -101,7 +104,7 @@ impl User {
     pub fn methods(self) -> &'static [&'static str] {
         match self {
             User::Debug => &["Target.createTarget"],
-            User::Translate => &["Runtime.evaluate"],
+            User::Translate => &["Runtime.evaluate", "Page.captureScreenshot"],
             User::Extensions => &["Runtime.evaluate", "Page.enable", "Page.addScriptToEvaluateOnNewDocument", "Target.setAutoAttach", "Target.detachFromTarget"],
             User::DevTools => &[
                 "DOM.describeNode",

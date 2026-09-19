@@ -49,6 +49,7 @@ mod log;
 mod app;
 mod automation;
 mod browsers;
+mod bytes;
 mod client;
 mod controller;
 #[cfg(debug_assertions)]
@@ -72,10 +73,13 @@ mod foreign;
 mod ipc;
 mod keyboard;
 mod motion;
+#[cfg(windows)]
+mod ocr;
 mod overlays;
 mod paths;
 mod permissions;
 mod platform;
+mod png;
 mod renderer;
 mod rounded;
 mod safe_mode;

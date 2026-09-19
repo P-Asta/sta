@@ -40,32 +40,10 @@ fn id_from_hash(hash: &[u8]) -> String {
     hash.iter().take(16).flat_map(|b| [b >> 4, b & 15]).map(|n| (b'a' + n) as char).collect()
 }
 
-fn base64_decode(text: &str) -> Option<Vec<u8>> {
-    let mut out = Vec::with_capacity(text.len() * 3 / 4);
-    let (mut acc, mut bits) = (0u32, 0u32);
-    for c in text.bytes().filter(|c| !c.is_ascii_whitespace()) {
-        let v = match c {
-            b'A'..=b'Z' => c - b'A',
-            b'a'..=b'z' => c - b'a' + 26,
-            b'0'..=b'9' => c - b'0' + 52,
-            b'+' | b'-' => 62,
-            b'/' | b'_' => 63,
-            b'=' => break,
-            _ => return None,
-        };
-        acc = (acc << 6) | v as u32;
-        bits += 6;
-        if bits >= 8 {
-            bits -= 8;
-            out.push((acc >> bits) as u8);
-        }
-    }
-    Some(out)
-}
 
 /// Id of an extension with a manifest `key` (base64 DER public key).
 pub fn id_from_key(key: &str) -> Option<String> {
-    let der = base64_decode(key)?;
+    let der = crate::bytes::base64_decode(key)?;
     crate::platform::sha256(&der).map(|h| id_from_hash(&h))
 }
 
@@ -543,7 +521,7 @@ mod tests {
             assert_eq!(normalize_page(bad), None, "{bad}");
         }
         assert_eq!(id_from_hash(&[0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef, 0, 0, 0, 0, 0, 0, 0, 0xff]), "abcdefghijklmnopaaaaaaaaaaaaaapp");
-        assert_eq!(base64_decode("aGVsbG8=").as_deref(), Some(&b"hello"[..]));
+        assert_eq!(crate::bytes::base64_decode("aGVsbG8=").as_deref(), Some(&b"hello"[..]));
     }
 
     #[test]

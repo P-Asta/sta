@@ -58,17 +58,51 @@ const PROGRESS_EVERY_MS: i64 = 400;
 const UR_FLAG_DISABLE_CACHE: i32 = sys::cef_urlrequest_flags_t::UR_FLAG_DISABLE_CACHE.0 as i32;
 const UR_FLAG_NO_RETRY_ON_5XX: i32 = sys::cef_urlrequest_flags_t::UR_FLAG_NO_RETRY_ON_5XX.0 as i32;
 
+/// Which half of the run a job is in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Phase {
+    Text,
+    Images,
+}
+
+/// One picture and the boxes of text found in it, in the picture's own CSS pixels.
+struct ImageLayer {
+    image: usize,
+    boxes: Vec<TextBox>,
+}
+
+struct TextBox {
+    x: f64,
+    y: f64,
+    w: f64,
+    h: f64,
+    /// The recognised text, replaced by its translation before the overlay is drawn.
+    text: String,
+    ink: String,
+    paper: String,
+    rtl: bool,
+}
+
 /// One page being translated.
 struct Job {
     browser_id: i32,
     target: String,
     /// Core asked for the text in pictures too (`settings.translate_images`).
-    #[allow(dead_code)]
     images: bool,
+    /// Which half is running. Text always first: the overlay draws text into the page, and
+    /// collecting after that would send sta's own translations back to be translated again.
+    phase: Phase,
+    /// The pictures being read, and where their text sits — filled by the image phase.
+    layers: Vec<ImageLayer>,
+    /// A remark for the toast that is not a failure ("Windows has no OCR for Japanese").
+    images_note: Option<String>,
     /// Every string, in the order the page collected them.
     texts: Vec<String>,
-    /// Translations for the batch cursor so far.
+    /// Translations of the batch that just landed.
     out: Vec<String>,
+    /// Every translation of the current phase, in order. The image overlay needs them all at the
+    /// end, where `out` only ever holds the last batch.
+    out_all: Vec<String>,
     /// Where the batch in flight starts in `texts`.
     at: usize,
     /// How many strings the batch in flight actually carries. The answer can be shorter, and the
@@ -189,6 +223,10 @@ fn collect(tab: Id, browser_id: i32, target: String, images: bool) {
             images,
             texts,
             out: Vec::new(),
+            out_all: Vec::new(),
+            phase: Phase::Text,
+            layers: Vec::new(),
+            images_note: None,
             at: 0,
             in_flight: 0,
             applied: 0,
@@ -225,7 +263,7 @@ fn batch_url(target: &str, texts: &[String], at: usize) -> (String, usize) {
 fn next_batch(tab: Id) {
     let started = JOBS.with(|j| {
         let mut jobs = j.borrow_mut();
-        let Some(job) = jobs.get_mut(&tab) else { return None };
+        let job = jobs.get_mut(&tab)?;
         if job.at >= job.texts.len() {
             return Some(None); // done
         }
@@ -345,14 +383,20 @@ fn on_batch_complete(tab: Id, batch: u64, status: Option<i32>) {
     // Write this batch into the page now: a later failure then keeps what already worked.
     let flush = JOBS.with(|j| {
         let mut jobs = j.borrow_mut();
-        let Some(job) = jobs.get_mut(&tab) else { return None };
+        let job = jobs.get_mut(&tab)?;
         job.out = translations.iter().take(in_flight).cloned().collect();
+        job.out_all.extend(job.out.iter().cloned());
         // Advance by what was SENT, never by what came back, or a short answer re-sends the tail.
         job.at = if translations.is_empty() { job.texts.len() } else { at + in_flight };
         release(job);
         Some((job.browser_id, at, job.out.clone()))
     });
     let Some((browser_id, offset, out)) = flush else { return };
+    // The image phase collects its translations and paints them all at the end (finish_images);
+    // only the text phase writes them into the document as they land.
+    if JOBS.with(|j| j.borrow().get(&tab).is_some_and(|job| job.phase == Phase::Images)) {
+        return next_batch(tab);
+    }
     let payload = Value::Array(out.into_iter().map(Value::String).collect()).to_string();
     let expression = format!("globalThis.__staTranslate.apply({offset},{payload})");
     evaluate(browser_id, expression, move |result| {
@@ -392,13 +436,303 @@ fn parse_batch(body: &[u8]) -> Result<Vec<String>, String> {
         .collect())
 }
 
-/// Every batch is already in the page; this only reports the total.
+/// A batch phase ended. The text phase hands over to the images; the image phase finishes the run.
 fn apply(tab: Id) {
-    let Some((applied, truncated)) = JOBS.with(|j| j.borrow().get(&tab).map(|job| (job.applied, job.truncated))) else {
+    let Some((phase, browser_id, images)) = JOBS.with(|j| {
+        let jobs = j.borrow();
+        let job = jobs.get(&tab)?;
+        Some((job.phase, job.browser_id, job.images))
+    }) else {
+        return;
+    };
+    match phase {
+        Phase::Text if images => start_images(tab, browser_id),
+        Phase::Text => done_with_text(tab),
+        Phase::Images => finish_images(tab),
+    }
+}
+
+fn done_with_text(tab: Id) {
+    let Some((applied, truncated, note)) = JOBS.with(|j| {
+        let jobs = j.borrow();
+        jobs.get(&tab).map(|job| (job.applied, job.truncated, job.images_note.clone()))
+    }) else {
         return;
     };
     drop_job(tab);
-    finish(tab, Outcome { strings: applied, truncated, ..Outcome::default() });
+    finish(tab, Outcome { strings: applied, truncated, images_note: note, ..Outcome::default() });
+}
+
+// ---------------------------------------------------------------------------------- the pictures
+//
+// One screenshot of the viewport, cropped here to each picture, rather than fetching the pictures
+// themselves: Chromium has already decoded them, so canvas tainting, hotlink and credential 403s,
+// `blob:`/`srcset` ambiguity and the WebP/AVIF question all stop being our problem at once. The
+// pixels never leave the machine — Windows reads them (`ocr.rs`) and only the text goes on to be
+// translated, through the same batcher the page's own text uses.
+
+/// A picture smaller than this after cropping cannot carry readable text.
+const MIN_CROP: u32 = 24;
+/// Below this device-pixel ratio the crop is doubled: Windows' recogniser has a fixed minimum
+/// feature size, and small captions are read far more reliably at 2x.
+const UPSCALE_BELOW: f64 = 1.5;
+const CAPTURE_TIMEOUT_MS: i64 = 15_000;
+
+#[cfg(not(windows))]
+fn start_images(tab: Id, _browser_id: i32) {
+    note_and_finish_text(tab, "reading text in pictures is Windows only");
+}
+
+/// Finishes the text phase, carrying a remark the toast will add.
+fn note_and_finish_text(tab: Id, note: &str) {
+    JOBS.with(|j| {
+        if let Some(job) = j.borrow_mut().get_mut(&tab) {
+            job.images_note = Some(note.to_string());
+        }
+    });
+    done_with_text(tab);
+}
+
+#[cfg(windows)]
+fn start_images(tab: Id, browser_id: i32) {
+    report(tab, TranslatePhase::Images, 0, 0);
+    evaluate(browser_id, "globalThis.__staTranslate.imageTargets()".into(), move |result| {
+        let targets = match result {
+            Ok(v) => v,
+            // The text is already translated; an image failure must not lose it.
+            Err(e) => return note_and_finish_text(tab, &format!("couldn't look for pictures ({e})")),
+        };
+        let items: Vec<(f64, f64, f64, f64)> = targets
+            .get("items")
+            .and_then(Value::as_array)
+            .map(|a| {
+                a.iter()
+                    .map(|it| {
+                        let n = |k: &str| it.get(k).and_then(Value::as_f64).unwrap_or(0.0);
+                        (n("x"), n("y"), n("w"), n("h"))
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        if items.is_empty() {
+            return done_with_text(tab);
+        }
+        // A tab that is not being rendered cannot be screenshotted; it would hang, not fail.
+        if targets.get("visible").and_then(Value::as_bool) != Some(true) {
+            return note_and_finish_text(tab, "pictures are only read while the tab is on screen");
+        }
+        let page_lang = targets.get("lang").and_then(Value::as_str).unwrap_or("en").to_string();
+        let Some(ocr_lang) = crate::ocr::pick_language(&page_lang) else {
+            return note_and_finish_text(
+                tab,
+                &format!("Windows has no text recognition for '{page_lang}' (add it in Settings › Time & language › Language & region)"),
+            );
+        };
+        let vw = targets.get("vw").and_then(Value::as_f64).unwrap_or(0.0);
+        capture(tab, browser_id, vw, items, ocr_lang);
+    });
+}
+
+#[cfg(windows)]
+fn capture(tab: Id, browser_id: i32, vw: f64, items: Vec<(f64, f64, f64, f64)>, ocr_lang: String) {
+    let params = json!({ "format": "png", "fromSurface": true, "captureBeyondViewport": false });
+    devtools_cdp::call(browser_id, User::Translate, "Page.captureScreenshot", params, CAPTURE_TIMEOUT_MS, move |result| {
+        let data = match result {
+            Ok(v) => v.get("data").and_then(Value::as_str).unwrap_or_default().to_string(),
+            Err(e) => return note_and_finish_text(tab, &format!("couldn't read the pictures ({e})")),
+        };
+        let Some(bytes) = crate::bytes::base64_decode(&data) else {
+            return note_and_finish_text(tab, "couldn't read the pictures");
+        };
+        let shot = match crate::png::read_png(&bytes) {
+            Ok(image) => image,
+            Err(e) => return note_and_finish_text(tab, &format!("couldn't read the pictures ({e})")),
+        };
+        // Device pixels per CSS pixel, read from the bitmap rather than trusting devicePixelRatio,
+        // which Chromium rounds.
+        let k = if vw > 0.0 { shot.width as f64 / vw } else { 1.0 };
+        let dir = match scratch_dir() {
+            Ok(dir) => dir,
+            Err(e) => return note_and_finish_text(tab, &e),
+        };
+        let mut paths = Vec::new();
+        let mut kept = Vec::new();
+        for (i, (x, y, w, h)) in items.iter().enumerate() {
+            let crop = crate::png::crop(&shot, (x * k) as u32, (y * k) as u32, (w * k) as u32, (h * k) as u32);
+            if crop.width < MIN_CROP || crop.height < MIN_CROP {
+                continue;
+            }
+            let (crop, scale) = if k < UPSCALE_BELOW { (crate::png::upscale2x(&crop), k * 2.0) } else { (crop, k) };
+            let path = dir.join(format!("img-{i}.png"));
+            let Ok(png) = crate::png::write_png(&crop) else { continue };
+            if std::fs::write(&path, png).is_err() {
+                continue;
+            }
+            paths.push(path);
+            kept.push((i, crop, scale));
+        }
+        if paths.is_empty() {
+            let _ = std::fs::remove_dir_all(&dir);
+            return done_with_text(tab);
+        }
+        crate::ocr::recognize(ocr_lang, paths, move |result| {
+            let _ = std::fs::remove_dir_all(&dir);
+            match result {
+                Ok(pages) => on_ocr(tab, kept, pages),
+                Err(e) => note_and_finish_text(tab, &e),
+            }
+        });
+    });
+}
+
+/// A fresh directory for this run's crops. Wiped first, so a crashed run leaves nothing behind.
+#[cfg(windows)]
+fn scratch_dir() -> Result<std::path::PathBuf, String> {
+    // The disk on this machine fills up; a failed write here would otherwise look like bad OCR.
+    if crate::platform::free_disk_bytes(&crate::paths::dirs().base).is_some_and(|free| free < 200 * 1024 * 1024) {
+        return Err("there is not enough free disk space to read the pictures".into());
+    }
+    let dir = crate::paths::dirs().base.join("ocr");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).map_err(|e| format!("couldn't prepare the pictures ({e})"))?;
+    Ok(dir)
+}
+
+/// The recognised text is in; turn it into the image phase's batch of strings.
+#[cfg(windows)]
+fn on_ocr(tab: Id, kept: Vec<(usize, crate::png::Image, f64)>, pages: Vec<crate::ocr::Page>) {
+    let mut layers: Vec<ImageLayer> = Vec::new();
+    let mut texts: Vec<String> = Vec::new();
+    for ((image, crop, scale), page) in kept.iter().zip(pages.iter()) {
+        let merged = crate::ocr::merge_lines(&page.lines);
+        let mut boxes = Vec::new();
+        for line in merged {
+            let (ink, paper) = colours(crop, &line);
+            boxes.push(TextBox {
+                // Back to the picture's own CSS pixels.
+                x: line.x / scale,
+                y: line.y / scale,
+                w: line.w / scale,
+                h: line.h / scale,
+                text: line.text.clone(),
+                ink,
+                paper,
+                rtl: false,
+            });
+            texts.push(line.text);
+        }
+        if !boxes.is_empty() {
+            layers.push(ImageLayer { image: *image, boxes });
+        }
+    }
+    if texts.is_empty() {
+        return done_with_text(tab);
+    }
+    let total = texts.len() as u32;
+    let restarted = JOBS.with(|j| {
+        let mut jobs = j.borrow_mut();
+        let Some(job) = jobs.get_mut(&tab) else { return false };
+        job.phase = Phase::Images;
+        job.layers = layers;
+        job.texts = texts;
+        job.out = Vec::new();
+        job.out_all = Vec::new();
+        job.at = 0;
+        job.in_flight = 0;
+        job.last_progress = 0;
+        true
+    });
+    if restarted {
+        report(tab, TranslatePhase::Images, 0, total);
+        next_batch(tab);
+    }
+}
+
+/// Ink and paper for one line, estimated from the pixels around and inside its box. A busy
+/// photographic background cannot be matched, so this falls back to a legible chip rather than
+/// painting dark text on dark.
+#[cfg(windows)]
+fn colours(crop: &crate::png::Image, line: &crate::ocr::Line) -> (String, String) {
+    let luma = |p: [u8; 4]| 0.2126 * p[0] as f64 + 0.7152 * p[1] as f64 + 0.0722 * p[2] as f64;
+    let (x0, y0) = (line.x.max(0.0) as u32, line.y.max(0.0) as u32);
+    let (w, h) = (line.w.max(1.0) as u32, line.h.max(1.0) as u32);
+    let mut outside: Vec<[u8; 4]> = Vec::new();
+    for dx in 0..w {
+        for y in [y0.saturating_sub(2), (y0 + h + 1).min(crop.height.saturating_sub(1))] {
+            if let Some(p) = crop.pixel(x0 + dx, y) {
+                outside.push(p);
+            }
+        }
+    }
+    let mut inside: Vec<[u8; 4]> = Vec::new();
+    for dy in 0..h {
+        for dx in 0..w {
+            if let Some(p) = crop.pixel(x0 + dx, y0 + dy) {
+                inside.push(p);
+            }
+        }
+    }
+    let mean = |px: &[[u8; 4]]| -> Option<[u8; 4]> {
+        if px.is_empty() {
+            return None;
+        }
+        let mut sum = [0u64; 3];
+        for p in px {
+            for i in 0..3 {
+                sum[i] += p[i] as u64;
+            }
+        }
+        Some([(sum[0] / px.len() as u64) as u8, (sum[1] / px.len() as u64) as u8, (sum[2] / px.len() as u64) as u8, 255])
+    };
+    let hex = |p: [u8; 4]| format!("#{:02x}{:02x}{:02x}", p[0], p[1], p[2]);
+    let Some(paper) = mean(&outside).or_else(|| mean(&inside)) else {
+        return ("#fff".into(), "rgba(0,0,0,0.78)".into());
+    };
+    // The ink is the tenth of the inside pixels furthest in luma from the paper.
+    let mut ranked = inside.clone();
+    ranked.sort_by(|a, b| {
+        (luma(*b) - luma(paper)).abs().partial_cmp(&(luma(*a) - luma(paper)).abs()).unwrap_or(std::cmp::Ordering::Equal)
+    });
+    ranked.truncate((ranked.len() / 10).max(1));
+    match mean(&ranked) {
+        Some(ink) if (luma(ink) - luma(paper)).abs() >= 60.0 => (hex(ink), hex(paper)),
+        // Not enough contrast to imitate: a plain chip is readable where a guess would not be.
+        _ => ("#fff".into(), "rgba(0,0,0,0.78)".into()),
+    }
+}
+
+/// The image phase's translations are in; draw them over the pictures.
+fn finish_images(tab: Id) {
+    let Some((browser_id, layers, applied, truncated, note)) = JOBS.with(|j| {
+        let jobs = j.borrow();
+        let job = jobs.get(&tab)?;
+        let layers: Vec<Value> = {
+            let mut texts = job.out_all.iter();
+            job.layers
+                .iter()
+                .map(|layer| {
+                    json!({
+                        "image": layer.image,
+                        "boxes": layer.boxes.iter().map(|b| json!({
+                            "x": b.x, "y": b.y, "w": b.w, "h": b.h,
+                            "text": texts.next().cloned().unwrap_or_else(|| b.text.clone()),
+                            "ink": b.ink, "paper": b.paper, "rtl": b.rtl,
+                        })).collect::<Vec<_>>(),
+                    })
+                })
+                .collect()
+        };
+        Some((job.browser_id, layers, job.applied, job.truncated, job.images_note.clone()))
+    }) else {
+        return;
+    };
+    let payload = Value::Array(layers).to_string();
+    let expression = format!("globalThis.__staTranslate.applyImages({payload})");
+    evaluate(browser_id, expression, move |result| {
+        let images = result.ok().and_then(|v| v.as_u64()).unwrap_or(0) as u32;
+        drop_job(tab);
+        finish(tab, Outcome { strings: applied, images, truncated, images_note: note, ..Outcome::default() });
+    });
 }
 
 /// What the run came to, for `Command::TranslateFinished`.

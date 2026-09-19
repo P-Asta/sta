@@ -416,6 +416,11 @@ pub struct Settings {
     /// Target language of "Translate page" (context menu), as an ISO-639-1 code the translation
     /// endpoint understands (`en`, `ko`, `ja`, …). The source language is always detected.
     pub translate_language: String,
+    /// Also read the text inside the page's pictures and draw the translation over it. On by
+    /// default: the reading is done by Windows itself, so the pictures never leave the machine —
+    /// only the text they contain, which is the same deal the page's own text already makes. The
+    /// switch is here because it costs time on every translation and does nothing off Windows.
+    pub translate_images: bool,
     // ---------------------------------------------------------------- AI agents (MCP), docs/MCP.md
     /// Whether AI agents may connect through the MCP bridge. Unknown values load as `Off`.
     pub agent_access: AgentAccess,
@@ -486,6 +491,7 @@ impl Default for Settings {
             search_suggestions: true,
             animations: crate::motion::AnimationSettings::default(),
             translate_language: default_translate_language(),
+            translate_images: true,
             agent_access: AgentAccess::Off,
             agent_scope: AgentScope::AgentTabs,
             agent_sites: AgentSites::Ask,

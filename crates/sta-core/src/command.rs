@@ -519,13 +519,40 @@ pub enum Command {
     /// Context menu "Inspect" at page coordinates `x`/`y` (CSS pixels of the tab's page): opens
     /// DevTools if needed and selects the node at that point.
     InspectElement { tab: Id, x: i32, y: i32 },
-    /// Context menu "Translate to <language>": rewrite the tab's text (and the text sta can read
-    /// out of its images) into `settings.translate_language`. Running it on a tab that is already
-    /// translated puts the original page back, so the one menu item is both ways.
-    TranslatePage { tab: Id },
+    /// "Translate to <language>": rewrite the tab's text (and the text sta can read out of its
+    /// images) into `settings.translate_language`. Running it on a tab that is already translated
+    /// puts the original page back, so the one control is both ways. `tab` defaults to the focused
+    /// tab, because the top-bar chip, the shortcut and the omnibox all mean "this page".
+    TranslatePage {
+        #[serde(default)]
+        tab: Option<Id>,
+    },
+    /// Stop a translation that is running (the chip's Stop). Ignored when the tab is not busy.
+    CancelTranslate {
+        #[serde(default)]
+        tab: Option<Id>,
+    },
+    /// How far the shell has got, so the chip can count. Throttled by the shell, and only sent
+    /// while the tab really is translating.
+    TranslateProgress { tab: Id, phase: crate::translate::TranslatePhase, done: u32, total: u32 },
     /// The shell finished (or gave up on) a `TranslatePage`, and says what to tell the user.
     /// `strings` is how many pieces of text were rewritten, `images` how many images carried text.
-    TranslateFinished { tab: Id, strings: u32, images: u32, restored: bool, error: Option<String> },
+    TranslateFinished {
+        tab: Id,
+        strings: u32,
+        images: u32,
+        restored: bool,
+        error: Option<String>,
+        /// The user pressed Stop, so say nothing about how little got done.
+        #[serde(default)]
+        cancelled: bool,
+        /// The page had more text than one run translates; the toast says so.
+        #[serde(default)]
+        truncated: bool,
+        /// A remark that is not a failure — most often "Windows has no OCR for this language".
+        #[serde(default)]
+        images_note: Option<String>,
+    },
 
     // ------------------------------------------------------------------ AI agent events (shell)
     /// An agent client said hello (shell-allocated request id). Core answers at once
@@ -611,6 +638,7 @@ impl Command {
                 | Command::DevToolsUndockRequested { .. }
                 | Command::DevToolsLinkRequested { .. }
                 | Command::InspectElement { .. }
+                | Command::TranslateProgress { .. }
                 | Command::TranslateFinished { .. }
                 | Command::AgentConnectionRequested { .. }
                 | Command::AgentSessionStarted { .. }
@@ -830,6 +858,8 @@ pub struct SettingsPatch {
     pub animations: Option<crate::motion::AnimationsPatch>,
     /// Target language of "Translate page"; ignored unless it is one of `TRANSLATE_LANGUAGES`.
     pub translate_language: Option<String>,
+    /// Also read the text in the page's pictures (Windows only).
+    pub translate_images: Option<bool>,
     pub agent_access: Option<AgentAccess>,
     pub agent_scope: Option<AgentScope>,
     pub agent_sites: Option<AgentSites>,

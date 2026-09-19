@@ -9,6 +9,7 @@ import { NavButtons, UrlPill } from '/common/chrome.js';
 import { classNames, shortcut } from '/common/util.js';
 import * as motion from '/common/motion.js';
 import { AgentChip } from './agent-chip.js';
+import { TranslateChip } from './translate-chip.js';
 
 const fire = (command) => dispatch(command).catch((e) => console.error('[topbar] dispatch failed', command, e));
 
@@ -86,6 +87,7 @@ function Topbar({ state }) {
     </div>
     <div class="tb-center">${!sidebarVisible && html`<${UrlPill} current=${current} compact />`}</div>
     <div class="tb-right">
+      <${TranslateChip} current=${current} settings=${state.settings} />
       <${AgentChip} agent=${state.agent} />
       <${IconButton}
         class="tb-split"

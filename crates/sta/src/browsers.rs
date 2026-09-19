@@ -242,6 +242,9 @@ pub fn on_before_close(browser: &Browser) {
             crate::devtools::on_inspected_browser_closed(id);
             // …and one that dies mid-translation drops that job rather than answering into nothing.
             crate::translate::on_browser_closed(id);
+            // Any CDP call still outstanding for this browser can never answer now. Without this
+            // its timeout fires later and reports a failure against a tab that is already gone.
+            crate::devtools_cdp::on_browser_closed(id);
             tabs::on_before_close(id, tab);
         }
         Some(Role::DevTools { tab }) => crate::devtools::on_frontend_closed(id, tab),

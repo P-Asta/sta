@@ -8,7 +8,7 @@ import { AppMark, Icon } from '/common/icons.js';
 import { Button, IconButton, Select, TextField, Toggle } from '/common/components.js';
 import { Segmented, mountPage, useNavIndicator } from '/common/internal-page.js';
 import * as motion from '/common/motion.js';
-import { classNames, IS_MAC } from '/common/util.js';
+import { classNames, IS_MAC, TRANSLATE_LANGUAGES, translateLanguageName } from '/common/util.js';
 import { AgentsSection } from './agents.js';
 import { AnimationsSection } from './animations.js';
 import { ExtensionsSection } from './extensions.js';
@@ -244,29 +244,10 @@ function SearchSection({ settings, engines }) {
   <//>`;
 }
 
-/** Mirrors `TRANSLATE_LANGUAGES` in `crates/sta-core/src/model.rs`; core ignores any other code. */
-const TRANSLATE_LANGUAGES = [
-  ['en', 'English'],
-  ['ko', 'Korean'],
-  ['ja', 'Japanese'],
-  ['zh-CN', 'Chinese (Simplified)'],
-  ['zh-TW', 'Chinese (Traditional)'],
-  ['es', 'Spanish'],
-  ['fr', 'French'],
-  ['de', 'German'],
-  ['ru', 'Russian'],
-  ['pt', 'Portuguese'],
-  ['it', 'Italian'],
-  ['vi', 'Vietnamese'],
-  ['id', 'Indonesian'],
-  ['hi', 'Hindi'],
-  ['ar', 'Arabic'],
-];
-
 function TranslationSection({ settings }) {
   const options = TRANSLATE_LANGUAGES.map(([value, label]) => ({ value, label }));
   const current = settings.translateLanguage ?? 'en';
-  const name = TRANSLATE_LANGUAGES.find(([c]) => c === current)?.[1] ?? current;
+  const name = translateLanguageName(current);
   return html`<${Section} id="translation" title="Translation">
     <${Setting}
       label="Translate pages into"
@@ -284,6 +265,21 @@ function TranslationSection({ settings }) {
           onChange=${(v) => update({ translateLanguage: v })}
         />
       </div>
+    <//>
+    <${Setting}
+      label="Translate text in images"
+      desc=${html`<span
+        >Reads the text in pictures on the page with Windows' own text recognition and draws the
+        translation over it. The pictures stay on this machine — only the text found in them is sent
+        to Google Translate. Windows only, and it needs the OCR language pack for the language in the
+        picture.</span
+      >`}
+    >
+      <${Toggle}
+        checked=${settings.translateImages === true}
+        ariaLabel="Translate text in images"
+        onChange=${(v) => update({ translateImages: v })}
+      />
     <//>
   <//>`;
 }

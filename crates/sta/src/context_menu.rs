@@ -251,7 +251,7 @@ wrap_context_menu_handler! {
                 CMD_COPY_IMAGE_ADDRESS => controller::dispatch(Command::CopyText { text: user_string(params.source_url()) }),
                 CMD_TRANSLATE => {
                     if let Some(tab) = tab_of(browser) {
-                        controller::dispatch(Command::TranslatePage { tab });
+                        controller::dispatch(Command::TranslatePage { tab: Some(tab) });
                     }
                 }
                 // Inspect goes through core (which refuses `sta://` pages and opens the dock

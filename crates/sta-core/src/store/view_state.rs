@@ -168,6 +168,7 @@ impl Store {
             audible: r.is_some_and(|r| r.audible),
             load_error: r.and_then(|r| r.load_error.clone()),
             split_panes: self.active_item().and_then(|a| self.split_item(a)).map_or(0, |s| s.panes.len()),
+            translate: r.map(|r| r.translate.clone()).unwrap_or_default(),
         })
     }
 

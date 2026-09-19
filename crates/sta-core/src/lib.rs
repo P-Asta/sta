@@ -30,6 +30,7 @@ pub mod omnibox;
 pub mod persist;
 pub mod store;
 pub mod theme;
+pub mod translate;
 pub mod update;
 pub mod urls;
 pub mod view;
@@ -44,6 +45,7 @@ pub use model::*;
 pub use motion::{AnimationSettings, AnimationSpec, AnimationsPatch, MotionGroup, MotionLevel, MotionView};
 pub use omnibox::{OmniboxRequest, OmniboxResponse, OmniboxResult, ResultGroup, ResultIcon};
 pub use store::Store;
+pub use translate::{TranslatePhase, TranslateStatus};
 pub use update::{Asset as UpdateAsset, Manifest as UpdateManifest, UpdateStatus};
 pub use view::*;
 

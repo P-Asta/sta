@@ -24,8 +24,8 @@ export const SHELL_ONLY_COMMANDS = new Set([
   'foreignTabRequested', 'extensionInstalled', 'foreignBlocked', 'lowDiskSpace',
   // docked DevTools (devtools.rs)
   'devToolsClosed', 'devToolsUndockRequested', 'devToolsLinkRequested', 'inspectElement',
-  // translation (translate.rs reports the outcome; the ask itself is allowed from the UI)
-  'translateFinished',
+  // translation (translate.rs reports; the asks themselves are allowed from the UI)
+  'translateFinished', 'translateProgress',
   // extensions (extensions.rs, ext_backend.rs, ext_popup.rs)
   'extensionsChanged', 'extensionDetailsLoaded', 'extensionOpFailed', 'extensionPopupClosed', 'safeModeStarted',
   'updateStatusChanged',
@@ -143,8 +143,10 @@ export const COMMAND_FIELDS = Object.freeze({
   windowControl: { action: ['minimize', 'toggleMaximize', 'close', 'toggleFullscreen'] },
   quit: {},
   dismissToast: { id: 'id' },
-  // translation (the shell answers with `translateFinished`, which is shell-only)
-  translatePage: { tab: 'id' },
+  // translation (`tab` defaults to the focused tab; the shell answers with the shell-only
+  // `translateFinished` and `translateProgress`)
+  translatePage: {},
+  cancelTranslate: {},
   // settings & boosts
   updateSettings: { patch: 'object' },
   upsertBoost: { boost: 'object' },

@@ -58,11 +58,16 @@
       };
     },
 
-    /** Write `texts[i]` back into the i-th collected node, keeping its original edge whitespace. */
-    apply(texts) {
+    /**
+     * Write `texts[i]` into the (offset + i)-th collected node, keeping its original edge
+     * whitespace. sta calls this once per batch as the batch lands, so a run that fails near the
+     * end keeps everything that already worked.
+     */
+    apply(offset, texts) {
       let changed = 0;
-      for (let i = 0; i < state.entries.length && i < texts.length; i++) {
-        const entry = state.entries[i];
+      for (let i = 0; i < texts.length; i++) {
+        const entry = state.entries[offset + i];
+        if (!entry) break;
         const text = texts[i];
         if (typeof text !== 'string' || !text) continue;
         // The node may have been re-rendered by the page since collect(); leave those alone.
@@ -72,7 +77,8 @@
         entry.translated = entry.node.nodeValue;
         changed++;
       }
-      state.translated = changed > 0;
+      // Sticky: a later batch that changes nothing must not un-mark a page that is translated.
+      if (changed > 0) state.translated = true;
       return changed;
     },
 

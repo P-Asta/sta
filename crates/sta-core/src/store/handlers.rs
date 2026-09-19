@@ -3,6 +3,7 @@
 use super::tree::normalize_fractions;
 use super::*;
 use crate::omnibox::{classify, resolve_input, Classified};
+use crate::translate::{TranslatePhase, TranslateStatus};
 use crate::urls;
 
 impl Store {
@@ -259,24 +260,67 @@ impl Store {
 
             // -------------------------------------------------------------- translation
             // Whether this translates or restores is the page's to answer, so there is no toast
-            // yet: the shell sends `TranslateFinished` once it knows.
+            // yet: the shell sends `TranslateFinished` once it knows. What core does own is the
+            // "already busy" refusal — the chip must not start a second run over the first.
             Command::TranslatePage { tab } => {
-                if self.is_live(tab) {
+                if let Some(tab) = tab.or_else(|| self.focused_tab())
+                    && self.is_live(tab)
+                    && !self.trt(tab).translate.is_busy()
+                {
                     let target = self.state.settings.translate_language.clone();
-                    fx.push(Effect::TranslatePage { tab, target });
+                    let images = self.state.settings.translate_images;
+                    self.trt(tab).translate = TranslateStatus::Working {
+                        target: target.clone(),
+                        phase: TranslatePhase::Collecting,
+                        done: 0,
+                        total: 0,
+                    };
+                    fx.push(Effect::TranslatePage { tab, target, images });
+                    self.bump();
                 }
             }
-            Command::TranslateFinished { tab, strings, images, restored, error } => {
-                let _ = tab;
-                let name = crate::model::translate_language_name(&self.state.settings.translate_language);
+            // The state change waits for the `TranslateFinished { cancelled }` that comes back, so
+            // a cancel that races the last batch cannot strand the chip in Working.
+            Command::CancelTranslate { tab } => {
+                if let Some(tab) = tab.or_else(|| self.focused_tab())
+                    && self.is_live(tab)
+                    && self.trt(tab).translate.is_busy()
+                {
+                    fx.push(Effect::CancelTranslate { tab });
+                }
+            }
+            Command::TranslateFinished { tab, strings, images, restored, error, cancelled, truncated, images_note } => {
+                let name = crate::model::translate_language_name(&self.state.settings.translate_language).to_string();
+                if self.is_live(tab) {
+                    let target = self.state.settings.translate_language.clone();
+                    self.trt(tab).translate = match &error {
+                        Some(message) => TranslateStatus::Failed { message: message.clone() },
+                        None if cancelled || restored || (strings == 0 && images == 0) => TranslateStatus::Idle,
+                        None => TranslateStatus::Translated { target, strings, images, note: images_note.clone() },
+                    };
+                    self.bump();
+                }
+                let extra = |base: String| {
+                    let mut text = base;
+                    if truncated {
+                        text.push_str(&format!(" (the first {} texts)", crate::translate::MAX_STRINGS));
+                    }
+                    if let Some(note) = images_note.as_deref() {
+                        text.push_str(&format!(" — {note}"));
+                    }
+                    text
+                };
                 match error {
                     Some(e) => self.toast(format!("Couldn't translate this page — {e}"), None),
+                    None if cancelled => self.toast("Translation stopped", None),
                     None if restored => self.toast("Showing the original page", None),
-                    None if strings == 0 && images == 0 => self.toast("Nothing to translate on this page", None),
-                    None if images > 0 => {
-                        self.toast(format!("Translated to {name} — {strings} texts and {images} images"), None)
+                    None if strings == 0 && images == 0 => {
+                        self.toast(extra("Nothing to translate on this page".into()), None)
                     }
-                    None => self.toast(format!("Translated to {name} — {strings} texts"), None),
+                    None if images > 0 => {
+                        self.toast(extra(format!("Translated to {name} — {strings} texts and {images} images")), None)
+                    }
+                    None => self.toast(extra(format!("Translated to {name} — {strings} texts")), None),
                 }
             }
 
@@ -1193,6 +1237,9 @@ impl Store {
             && crate::model::TRANSLATE_LANGUAGES.iter().any(|(c, _)| *c == v)
         {
             s.translate_language = v.to_string();
+        }
+        if let Some(v) = patch.translate_images {
+            s.translate_images = v;
         }
         self.touch();
     }

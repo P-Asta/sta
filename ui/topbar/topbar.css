@@ -104,6 +104,7 @@ body,
 }
 
 .topbar.is-inactive .caption-btn:not(:hover),
-.topbar.is-inactive .tb-left .icon-btn:not(:hover) {
+.topbar.is-inactive .tb-left .icon-btn:not(:hover),
+.topbar.is-inactive .tr-chip:not(:hover) {
   color: var(--text-faint);
 }

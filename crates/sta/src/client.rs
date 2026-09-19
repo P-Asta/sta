@@ -993,6 +993,9 @@ wrap_load_handler! {
             } else if web_tab_of(browser).is_some() {
                 // A new main-frame document: media of the old one is gone.
                 reset_media(browser.identifier());
+                // The translated text and the script that remembered the originals both went with
+                // the old document.
+                crate::translate::on_navigated(browser.identifier());
                 crate::automation::on_load_start(browser.identifier());
                 crate::ext_shim::on_extension_tab_document(frame, &CefString::from(&frame.url()).to_string());
             }

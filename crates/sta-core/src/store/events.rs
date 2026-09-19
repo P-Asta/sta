@@ -53,6 +53,12 @@ impl Store {
                     if cross_document && loading {
                         self.trt(tab).audible = false;
                     }
+                    // A new document has none of the old one's translated text, and the page script
+                    // that held the originals died with it.
+                    if cross_document && self.trt(tab).translate != crate::translate::TranslateStatus::Idle {
+                        self.trt(tab).translate = crate::translate::TranslateStatus::Idle;
+                        self.bump();
+                    }
                     if let Some(t) = self.tab_any_mut(tab) {
                         t.url = url.clone();
                     }
@@ -325,6 +331,20 @@ impl Store {
                 if let Some(message) = announce {
                     self.toast(message, None);
                 } else {
+                    self.bump();
+                }
+            }
+            // The shell throttles these, but a repeated identical count must still not repaint.
+            Command::TranslateProgress { tab, phase, done, total } if self.is_live(tab) => {
+                let next = match &self.trt(tab).translate {
+                    crate::translate::TranslateStatus::Working { target, .. } => {
+                        crate::translate::TranslateStatus::Working { target: target.clone(), phase, done, total }
+                    }
+                    // Progress for a tab core does not think is translating is stale; ignore it.
+                    _ => return,
+                };
+                if self.trt(tab).translate != next {
+                    self.trt(tab).translate = next;
                     self.bump();
                 }
             }

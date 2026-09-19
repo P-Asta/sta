@@ -408,3 +408,31 @@ export function findItem(state, id) {
   }
   return null;
 }
+
+/**
+ * Languages "Translate page" offers, as `[code, English name]`. Mirrors `TRANSLATE_LANGUAGES` in
+ * `crates/sta-core/src/model.rs`; core ignores any code that is not on its own list, so a stale
+ * entry here fails safe (the setting simply does not change).
+ */
+export const TRANSLATE_LANGUAGES = [
+  ['en', 'English'],
+  ['ko', 'Korean'],
+  ['ja', 'Japanese'],
+  ['zh-CN', 'Chinese (Simplified)'],
+  ['zh-TW', 'Chinese (Traditional)'],
+  ['es', 'Spanish'],
+  ['fr', 'French'],
+  ['de', 'German'],
+  ['ru', 'Russian'],
+  ['pt', 'Portuguese'],
+  ['it', 'Italian'],
+  ['vi', 'Vietnamese'],
+  ['id', 'Indonesian'],
+  ['hi', 'Hindi'],
+  ['ar', 'Arabic'],
+];
+
+/** The display name for a stored language code (the code itself when it is not one we list). */
+export function translateLanguageName(code) {
+  return TRANSLATE_LANGUAGES.find(([c]) => c === code)?.[1] ?? code;
+}

@@ -240,6 +240,10 @@ struct TabRuntime {
     pending_typed: Option<String>,
     find_text: String,
     find_match_case: bool,
+    /// What "Translate page" is doing to this tab's *current document*. Runtime only: it is cleared
+    /// on a cross-document commit, on unload and when the browser is rebuilt, because the page
+    /// script that holds the originals dies with the document.
+    translate: crate::translate::TranslateStatus,
 }
 
 #[derive(Debug, Clone)]

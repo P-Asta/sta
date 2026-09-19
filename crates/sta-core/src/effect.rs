@@ -73,7 +73,10 @@ pub enum Effect {
     /// Translate the tab's page into `target` (an ISO-639-1 code), or, if the shell already
     /// translated it, put the original back. Core does not track which of the two it will be — the
     /// page itself is the record — so the shell reports what happened with `TranslateFinished`.
-    TranslatePage { tab: Id, target: String },
+    /// `images` carries `settings.translate_images`: core owns the policy, the shell just obeys.
+    TranslatePage { tab: Id, target: String, images: bool },
+    /// Stop the translation running on `tab`. The shell answers `TranslateFinished { cancelled }`.
+    CancelTranslate { tab: Id },
     Print { tab: Id },
     Find { tab: Id, text: String, forward: bool, match_case: bool, find_next: bool },
     StopFinding { tab: Id },

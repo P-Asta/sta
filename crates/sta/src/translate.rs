@@ -1,4 +1,4 @@
-//! "Translate page" [owner: tabs] (context menu → `Command::TranslatePage`).
+//! "Translate page" [owner: tabs] (`Command::TranslatePage`, the top-bar chip, the context menu).
 //!
 //! Chromium's own translation is switched off in `app.rs` (`disable-features=Translate`): it talks
 //! to an endpoint keyed to official Chrome builds, which a CEF build has no key for. This is sta's
@@ -9,29 +9,35 @@
 //!    prose in document order and remembers which text node each came from.
 //! 2. The strings are translated here, in the browser process, in batches over CEF's own network
 //!    stack (`Urlrequest`, the `suggest.rs` pattern — no cookies, no credentials).
-//! 3. The translations go back in the same order, and the page puts them where they came from.
+//! 3. Each batch is written back as it lands, so a page that fails on batch 46 of 50 keeps the 45
+//!    that worked, and the chip can count.
 //!
-//! Running it again on a page that is already translated **restores the original** instead, so the
-//! single menu item is both ways. The page is the record of which of the two will happen; core
-//! only says which language to aim for, and hears the outcome as `Command::TranslateFinished`.
+//! Running it again on a page that is already translated **restores the original**, so the single
+//! control is both ways. The page is the record of which of the two will happen; core only says
+//! which language to aim for and what it wants done about images, and hears back through
+//! `TranslateProgress` and `TranslateFinished`.
 //!
 //! The endpoint is Google's free `translate_a/t`, the one that takes repeated `q` parameters and
 //! answers `[[translated, detected], …]` in the same order. That is a GET with everything in the
-//! URL, so batches are capped by URL length as much as by count. **The text of the page leaves the
-//! machine** — that is the deal this feature makes, and the only reason it needs no API key.
+//! URL, so batches are capped by URL length as much as by count, and they run **one at a time**:
+//! this is an unofficial, unauthenticated endpoint and a page's worth of parallel requests is
+//! exactly what gets an IP rate-limited. **The text of the page leaves the machine** — that is the
+//! deal this feature makes, and the only reason it needs no API key.
 //!
 //! Public API:
-//! - `pub fn translate(tab: Id, target: String)`
-//! - `pub fn on_browser_closed(browser_id: i32)`, `pub fn clear()`, `pub fn debug_snapshot()`
+//! - `pub fn translate(tab: Id, target: String, images: bool)`, `pub fn cancel(tab: Id)`
+//! - `pub fn on_browser_closed(browser_id: i32)`, `pub fn on_navigated(browser_id: i32)`
+//! - `pub fn clear()`, `pub fn debug_snapshot()`
 
 use crate::devtools_cdp::{self, User};
 use crate::{controller, tabs, task};
 use cef::rc::Rc as _;
 use cef::*;
 use serde_json::{Value, json};
+use sta_core::translate::{MAX_STRINGS, TranslatePhase};
 use sta_core::{Command, Id};
-use std::cell::RefCell;
-use std::collections::HashMap;
+use std::cell::{Cell, RefCell};
+use std::collections::{HashMap, HashSet};
 
 const SHIM_JS: &str = include_str!("translate.js");
 
@@ -46,55 +52,94 @@ const MAX_BATCH: usize = 80;
 const MAX_BODY_BYTES: usize = 1024 * 1024;
 const REQUEST_TIMEOUT_MS: i64 = 20_000;
 const EVAL_TIMEOUT_MS: i64 = 10_000;
-/// A page with more prose than this is translated down to here rather than refused.
-const MAX_STRINGS: usize = 4000;
+/// Every status change repaints the whole UI, and a long page is 50+ batches.
+const PROGRESS_EVERY_MS: i64 = 400;
 
 const UR_FLAG_DISABLE_CACHE: i32 = sys::cef_urlrequest_flags_t::UR_FLAG_DISABLE_CACHE.0 as i32;
 const UR_FLAG_NO_RETRY_ON_5XX: i32 = sys::cef_urlrequest_flags_t::UR_FLAG_NO_RETRY_ON_5XX.0 as i32;
 
-/// One page being translated. Batches run one at a time: the endpoint is free and unofficial, and
-/// a page's worth of parallel requests is exactly what gets an IP rate-limited.
+/// One page being translated.
 struct Job {
     browser_id: i32,
     target: String,
+    /// Core asked for the text in pictures too (`settings.translate_images`).
+    #[allow(dead_code)]
+    images: bool,
     /// Every string, in the order the page collected them.
     texts: Vec<String>,
-    /// Translations so far, same order and length as `texts` once done.
+    /// Translations for the batch cursor so far.
     out: Vec<String>,
     /// Where the batch in flight starts in `texts`.
     at: usize,
+    /// How many strings the batch in flight actually carries. The answer can be shorter, and the
+    /// cursor must advance by what was *sent* or a short answer silently re-sends the tail forever.
+    in_flight: usize,
+    /// How many strings have been written into the page so far (what the chip counts).
+    applied: u32,
+    /// The page had more prose than one run handles.
+    truncated: bool,
     /// The batch in flight: its body and the request handle keeping it alive.
     body: Vec<u8>,
     request: Option<Urlrequest>,
-    /// Bumped per batch so a late callback from a cancelled one is ignored.
+    /// Globally unique per batch, so a late callback from a *previous job on the same tab* cannot
+    /// be mistaken for this one's.
     batch: u64,
     timed_out: bool,
+    last_progress: i64,
 }
 
 thread_local! {
-    /// At most one job per tab; a second Translate on a busy tab is ignored, not queued.
+    /// At most one job per tab.
     static JOBS: RefCell<HashMap<Id, Job>> = RefCell::new(HashMap::new());
+    /// Tabs between `translate()` and the job actually existing — two CDP round trips during which
+    /// `JOBS` is still empty and a second click would start a duplicate run.
+    static STARTING: RefCell<HashSet<Id>> = RefCell::new(HashSet::new());
+    /// Never reset per job: batch ids must not repeat for a tab that is translated twice.
+    static NEXT_BATCH: Cell<u64> = const { Cell::new(1) };
+}
+
+fn next_batch_id() -> u64 {
+    NEXT_BATCH.with(|n| {
+        let id = n.get();
+        n.set(id.wrapping_add(1));
+        id
+    })
+}
+
+fn busy(tab: Id) -> bool {
+    JOBS.with(|j| j.borrow().contains_key(&tab)) || STARTING.with(|s| s.borrow().contains(&tab))
 }
 
 /// Entry point (`Effect::TranslatePage`). Installs the page script, then either restores the
 /// original page or starts collecting it.
-pub fn translate(tab: Id, target: String) {
-    if JOBS.with(|j| j.borrow().contains_key(&tab)) {
+pub fn translate(tab: Id, target: String, images: bool) {
+    if busy(tab) {
         log_debug!("translate: tab {tab} is already being translated");
         return;
     }
     let Some(browser) = tabs::browser_for_tab(tab) else {
-        finish(tab, 0, 0, false, Some("the tab is gone".into()));
+        finish(tab, Outcome::failed("the tab is gone"));
         return;
     };
     let browser_id = browser.identifier();
+    STARTING.with(|s| s.borrow_mut().insert(tab));
     // Install (idempotent) and ask in one round trip whether this page is already translated.
     let expression = format!("{SHIM_JS};globalThis.__staTranslate.translated()");
     evaluate(browser_id, expression, move |result| match result {
         Ok(value) if value.as_bool() == Some(true) => restore(tab, browser_id),
-        Ok(_) => collect(tab, browser_id, target),
-        Err(e) => finish(tab, 0, 0, false, Some(e)),
+        Ok(_) => collect(tab, browser_id, target, images),
+        Err(e) => finish(tab, Outcome::failed(&e)),
     });
+}
+
+/// The chip's Stop (`Effect::CancelTranslate`).
+pub fn cancel(tab: Id) {
+    if !busy(tab) {
+        return;
+    }
+    let applied = JOBS.with(|j| j.borrow().get(&tab).map_or(0, |job| job.applied));
+    drop_job(tab);
+    finish(tab, Outcome { strings: applied, cancelled: true, ..Outcome::default() });
 }
 
 /// `Runtime.evaluate` in the tab's main world, `returnByValue`, unwrapped to the value itself.
@@ -114,12 +159,14 @@ fn evaluate(browser_id: i32, expression: String, done: impl FnOnce(Result<Value,
 
 fn restore(tab: Id, browser_id: i32) {
     evaluate(browser_id, "globalThis.__staTranslate.restore()".into(), move |result| match result {
-        Ok(_) => finish(tab, 0, 0, true, None),
-        Err(e) => finish(tab, 0, 0, false, Some(e)),
+        // The count is how many strings went back, so "Showing the original page" is only claimed
+        // when something actually moved.
+        Ok(value) => finish(tab, Outcome { strings: value.as_u64().unwrap_or(0) as u32, restored: true, ..Outcome::default() }),
+        Err(e) => finish(tab, Outcome::failed(&e)),
     });
 }
 
-fn collect(tab: Id, browser_id: i32, target: String) {
+fn collect(tab: Id, browser_id: i32, target: String, images: bool) {
     evaluate(browser_id, "globalThis.__staTranslate.collect()".into(), move |result| {
         let texts = match result {
             Ok(value) => value
@@ -127,26 +174,34 @@ fn collect(tab: Id, browser_id: i32, target: String) {
                 .and_then(Value::as_array)
                 .map(|a| a.iter().filter_map(Value::as_str).map(str::to_string).collect::<Vec<_>>())
                 .unwrap_or_default(),
-            Err(e) => return finish(tab, 0, 0, false, Some(e)),
+            Err(e) => return finish(tab, Outcome::failed(&e)),
         };
         if texts.is_empty() {
-            return finish(tab, 0, 0, false, None);
+            return finish(tab, Outcome::default());
         }
         let mut texts = texts;
+        let truncated = texts.len() > MAX_STRINGS;
         texts.truncate(MAX_STRINGS);
-        let out = vec![String::new(); texts.len()];
+        let total = texts.len();
         let job = Job {
             browser_id,
             target,
+            images,
             texts,
-            out,
+            out: Vec::new(),
             at: 0,
+            in_flight: 0,
+            applied: 0,
+            truncated,
             body: Vec::new(),
             request: None,
             batch: 0,
             timed_out: false,
+            last_progress: 0,
         };
         JOBS.with(|j| j.borrow_mut().insert(tab, job));
+        STARTING.with(|s| s.borrow_mut().remove(&tab));
+        report(tab, TranslatePhase::Text, 0, total as u32);
         next_batch(tab);
     });
 }
@@ -175,40 +230,49 @@ fn next_batch(tab: Id) {
             return Some(None); // done
         }
         let (url, count) = batch_url(&job.target, &job.texts, job.at);
-        job.batch += 1;
+        job.batch = next_batch_id();
+        job.in_flight = count;
         job.body.clear();
         job.timed_out = false;
-        Some(Some((url, count, job.batch, job.browser_id)))
+        Some(Some((url, job.batch)))
     });
     match started {
-        None => {}                        // the job is gone (tab closed)
-        Some(None) => apply(tab),         // every batch answered
-        Some(Some((url, count, batch, browser_id))) => {
-            let request = create_request(&url, tab, batch);
-            let ok = JOBS.with(|j| {
-                let mut jobs = j.borrow_mut();
-                let Some(job) = jobs.get_mut(&tab) else { return false };
-                job.request = request;
-                job.request.is_some()
-            });
-            if !ok {
-                return fail(tab, "the request could not be started".into());
+        None => {}                // the job is gone (tab closed, navigated, cancelled)
+        Some(None) => apply(tab), // every batch answered
+        Some(Some((url, batch))) => {
+            // No borrow held: CEF may complete a request synchronously.
+            match create_request(&url, tab, batch) {
+                Some(request) => {
+                    // The job may have ended while the request was being created; then the handle is
+                    // ours to drop, and there is nothing to report — `finish` already ran.
+                    let orphan = JOBS.with(|j| match j.borrow_mut().get_mut(&tab) {
+                        Some(job) if job.batch == batch => {
+                            job.request = Some(request);
+                            None
+                        }
+                        _ => Some(request),
+                    });
+                    if let Some(request) = orphan {
+                        task::post_ui(move || drop(request));
+                        return;
+                    }
+                    task::post_ui_delayed(REQUEST_TIMEOUT_MS, move || on_timeout(tab, batch));
+                }
+                None => fail(tab, "the request could not be started"),
             }
-            let _ = (count, browser_id);
-            task::post_ui_delayed(REQUEST_TIMEOUT_MS, move || on_timeout(tab, batch));
         }
     }
 }
 
 fn on_timeout(tab: Id, batch: u64) {
-    let stale = JOBS.with(|j| j.borrow().get(&tab).is_some_and(|job| job.batch == batch));
-    if stale {
+    let current = JOBS.with(|j| j.borrow().get(&tab).is_some_and(|job| job.batch == batch));
+    if current {
         JOBS.with(|j| {
             if let Some(job) = j.borrow_mut().get_mut(&tab) {
                 job.timed_out = true;
             }
         });
-        fail(tab, "the translation service did not answer".into());
+        fail(tab, "the translation service did not answer");
     }
 }
 
@@ -248,7 +312,7 @@ wrap_urlrequest_client! {
                 _ => false,
             });
             if too_large {
-                fail(self.tab, "the answer was too large".into());
+                fail(self.tab, "the answer was too large");
             }
         }
 
@@ -265,38 +329,52 @@ wrap_urlrequest_client! {
 fn on_batch_complete(tab: Id, batch: u64, status: Option<i32>) {
     let current = JOBS.with(|j| j.borrow().get(&tab).is_some_and(|job| job.batch == batch && !job.timed_out));
     if !current {
-        return; // superseded, timed out or the tab is gone
+        return; // superseded, timed out, cancelled or the tab is gone
     }
     match status {
         Some(200) => {}
-        Some(code) => return fail(tab, format!("the translation service answered {code}")),
-        None => return fail(tab, "the translation service could not be reached".into()),
+        Some(code) => return fail(tab, &format!("the translation service answered {code}")),
+        None => return fail(tab, "the translation service could not be reached"),
     }
-    let parsed = JOBS.with(|j| {
-        let jobs = j.borrow();
-        jobs.get(&tab).map(|job| (parse_batch(&job.body), job.at))
-    });
-    let Some((translations, at)) = parsed else { return };
+    let parsed = JOBS.with(|j| j.borrow().get(&tab).map(|job| (parse_batch(&job.body), job.at, job.in_flight)));
+    let Some((translations, at, in_flight)) = parsed else { return };
     let translations = match translations {
         Ok(t) => t,
-        Err(e) => return fail(tab, e),
+        Err(e) => return fail(tab, &e),
     };
-    let done = JOBS.with(|j| {
+    // Write this batch into the page now: a later failure then keeps what already worked.
+    let flush = JOBS.with(|j| {
         let mut jobs = j.borrow_mut();
-        let Some(job) = jobs.get_mut(&tab) else { return false };
-        for (i, text) in translations.iter().enumerate() {
-            if let Some(slot) = job.out.get_mut(at + i) {
-                *slot = text.clone();
-            }
-        }
-        // An empty answer would loop forever; treat it as the end of what we can do.
-        job.at = if translations.is_empty() { job.texts.len() } else { at + translations.len() };
+        let Some(job) = jobs.get_mut(&tab) else { return None };
+        job.out = translations.iter().take(in_flight).cloned().collect();
+        // Advance by what was SENT, never by what came back, or a short answer re-sends the tail.
+        job.at = if translations.is_empty() { job.texts.len() } else { at + in_flight };
         release(job);
-        true
+        Some((job.browser_id, at, job.out.clone()))
     });
-    if done {
+    let Some((browser_id, offset, out)) = flush else { return };
+    let payload = Value::Array(out.into_iter().map(Value::String).collect()).to_string();
+    let expression = format!("globalThis.__staTranslate.apply({offset},{payload})");
+    evaluate(browser_id, expression, move |result| {
+        match result {
+            Ok(value) => {
+                let written = value.as_u64().unwrap_or(0) as u32;
+                let counts = JOBS.with(|j| {
+                    let mut jobs = j.borrow_mut();
+                    let job = jobs.get_mut(&tab)?;
+                    job.applied += written;
+                    Some((job.applied, job.texts.len() as u32, job.at))
+                });
+                if let Some((applied, total, cursor)) = counts {
+                    maybe_report(tab, TranslatePhase::Text, applied, total);
+                    let _ = cursor;
+                }
+            }
+            // A page that refuses the write is not worth continuing against.
+            Err(e) => return fail(tab, &e),
+        }
         next_batch(tab);
-    }
+    });
 }
 
 /// `[[translated, detected], …]`, and defensively also a flat `[translated, …]`.
@@ -314,28 +392,38 @@ fn parse_batch(body: &[u8]) -> Result<Vec<String>, String> {
         .collect())
 }
 
-/// Hands the translations to the page and reports how many landed.
+/// Every batch is already in the page; this only reports the total.
 fn apply(tab: Id) {
-    let Some((browser_id, out)) = JOBS.with(|j| j.borrow().get(&tab).map(|job| (job.browser_id, job.out.clone()))) else {
+    let Some((applied, truncated)) = JOBS.with(|j| j.borrow().get(&tab).map(|job| (job.applied, job.truncated))) else {
         return;
     };
-    let payload = Value::Array(out.into_iter().map(Value::String).collect()).to_string();
-    let expression = format!("globalThis.__staTranslate.apply({payload})");
-    evaluate(browser_id, expression, move |result| {
-        drop_job(tab);
-        match result {
-            Ok(value) => {
-                let strings = value.as_u64().unwrap_or(0) as u32;
-                finish(tab, strings, 0, false, None);
-            }
-            Err(e) => finish(tab, 0, 0, false, Some(e)),
-        }
-    });
+    drop_job(tab);
+    finish(tab, Outcome { strings: applied, truncated, ..Outcome::default() });
 }
 
-fn fail(tab: Id, reason: String) {
+/// What the run came to, for `Command::TranslateFinished`.
+#[derive(Default)]
+struct Outcome {
+    strings: u32,
+    images: u32,
+    restored: bool,
+    cancelled: bool,
+    truncated: bool,
+    error: Option<String>,
+    images_note: Option<String>,
+}
+
+impl Outcome {
+    fn failed(reason: &str) -> Self {
+        Self { error: Some(reason.to_string()), ..Self::default() }
+    }
+}
+
+fn fail(tab: Id, reason: &str) {
+    // Keep whatever already landed in the page: the user can read that much.
+    let applied = JOBS.with(|j| j.borrow().get(&tab).map_or(0, |job| job.applied));
     drop_job(tab);
-    finish(tab, 0, 0, false, Some(reason));
+    finish(tab, Outcome { strings: applied, error: Some(reason.to_string()), ..Outcome::default() });
 }
 
 /// Releases a job's in-flight request without dropping the handle inside its own callback.
@@ -351,30 +439,93 @@ fn release(job: &mut Job) {
 }
 
 fn drop_job(tab: Id) {
+    STARTING.with(|s| s.borrow_mut().remove(&tab));
     if let Some(mut job) = JOBS.with(|j| j.borrow_mut().remove(&tab)) {
         release(&mut job);
     }
 }
 
-fn finish(tab: Id, strings: u32, images: u32, restored: bool, error: Option<String>) {
-    if let Some(e) = error.as_deref() {
-        log_info!("translate: tab {tab} failed ({e})");
-    }
-    controller::dispatch(Command::TranslateFinished { tab, strings, images, restored, error });
+fn report(tab: Id, phase: TranslatePhase, done: u32, total: u32) {
+    controller::dispatch(Command::TranslateProgress { tab, phase, done, total });
 }
 
-/// A tab whose browser went away stops translating.
+/// Throttled progress. The count is computed inside the borrow and dispatched outside it:
+/// `controller::dispatch` runs the store synchronously and would double-borrow `JOBS`.
+fn maybe_report(tab: Id, phase: TranslatePhase, done: u32, total: u32) {
+    let send = JOBS.with(|j| {
+        let mut jobs = j.borrow_mut();
+        let job = jobs.get_mut(&tab)?;
+        let now = sta_core::now_ms();
+        if now - job.last_progress < PROGRESS_EVERY_MS {
+            return None;
+        }
+        job.last_progress = now;
+        Some(())
+    });
+    if send.is_some() {
+        report(tab, phase, done, total);
+    }
+}
+
+fn finish(tab: Id, outcome: Outcome) {
+    STARTING.with(|s| s.borrow_mut().remove(&tab));
+    if let Some(e) = outcome.error.as_deref() {
+        log_info!("translate: tab {tab} failed ({e})");
+    }
+    controller::dispatch(Command::TranslateFinished {
+        tab,
+        strings: outcome.strings,
+        images: outcome.images,
+        restored: outcome.restored,
+        error: outcome.error,
+        cancelled: outcome.cancelled,
+        truncated: outcome.truncated,
+        images_note: outcome.images_note,
+    });
+}
+
+/// A tab whose browser went away stops translating, and says so — core would otherwise leave the
+/// chip spinning on a tab that no longer exists.
 pub fn on_browser_closed(browser_id: i32) {
-    let tabs: Vec<Id> = JOBS.with(|j| j.borrow().iter().filter(|(_, job)| job.browser_id == browser_id).map(|(t, _)| *t).collect());
-    for tab in tabs {
+    for tab in tabs_of(browser_id) {
         drop_job(tab);
     }
 }
 
+/// A new document has none of the old one's text, and the page script died with it.
+pub fn on_navigated(browser_id: i32) {
+    for tab in tabs_of(browser_id) {
+        drop_job(tab);
+        finish(tab, Outcome { cancelled: true, ..Outcome::default() });
+    }
+}
+
+fn tabs_of(browser_id: i32) -> Vec<Id> {
+    JOBS.with(|j| j.borrow().iter().filter(|(_, job)| job.browser_id == browser_id).map(|(t, _)| *t).collect())
+}
+
 /// Drops every job (after the message loop ended, before `cef::shutdown()`).
 pub fn clear() {
+    STARTING.with(|s| s.borrow_mut().clear());
     let taken = JOBS.with(|j| std::mem::take(&mut *j.borrow_mut()));
     drop(taken);
+}
+
+pub fn debug_snapshot() -> Value {
+    JOBS.with(|j| {
+        let jobs = j.borrow();
+        json!({
+            "jobs": jobs.iter().map(|(tab, job)| json!({
+                "tab": tab,
+                "target": job.target,
+                "images": job.images,
+                "strings": job.texts.len(),
+                "done": job.at,
+                "applied": job.applied,
+            })).collect::<Vec<_>>(),
+            "starting": STARTING.with(|s| s.borrow().iter().copied().collect::<Vec<_>>()),
+        })
+    })
 }
 
 #[cfg(test)]
@@ -425,6 +576,17 @@ mod tests {
     }
 
     #[test]
+    fn batch_ids_never_repeat() {
+        // Two jobs on the same tab must not share an id, or a late answer from the first is taken
+        // for an answer to the second.
+        let ids: Vec<u64> = (0..5).map(|_| next_batch_id()).collect();
+        let mut sorted = ids.clone();
+        sorted.dedup();
+        assert_eq!(ids.len(), sorted.len(), "{ids:?}");
+        assert!(ids.windows(2).all(|w| w[1] > w[0]), "{ids:?}");
+    }
+
+    #[test]
     fn the_answer_shape_is_pairs_of_translation_and_detected_language() {
         let body = br#"[["hello","ko"],["world","ko"]]"#;
         assert_eq!(parse_batch(body).unwrap(), vec!["hello", "world"]);
@@ -448,18 +610,15 @@ mod tests {
         // apply() skips empty strings, so a hole leaves that node alone instead of shifting others.
         assert_eq!(parse_batch(br#"[["a","ko"],null,["c","ko"]]"#).unwrap(), vec!["a", "", "c"]);
     }
-}
 
-pub fn debug_snapshot() -> Value {
-    JOBS.with(|j| {
-        let jobs = j.borrow();
-        json!({
-            "jobs": jobs.iter().map(|(tab, job)| json!({
-                "tab": tab,
-                "target": job.target,
-                "strings": job.texts.len(),
-                "done": job.at,
-            })).collect::<Vec<_>>(),
-        })
-    })
+    #[test]
+    fn a_short_answer_still_advances_by_what_was_sent() {
+        // The endpoint answered 2 of the 5 strings the batch carried. The cursor must move 5, or
+        // the next batch re-sends strings 2..5 and the page never finishes.
+        let sent = 5usize;
+        let received = parse_batch(br#"[["a","ko"],["b","ko"]]"#).unwrap();
+        assert_eq!(received.len(), 2);
+        let at = 10usize;
+        assert_eq!(at + sent, 15, "cursor advances by the sent count, not {}", received.len());
+    }
 }

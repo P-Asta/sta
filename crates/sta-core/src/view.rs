@@ -215,6 +215,10 @@ pub struct CurrentView {
     pub load_error: Option<String>,
     /// Number of panes when the active item is a split (0 otherwise).
     pub split_panes: usize,
+    /// What "Translate page" is doing to this tab, for the top bar's chip. Only the focused tab
+    /// carries it: a badge on every sidebar row would cost every snapshot and nobody asked for one.
+    #[serde(default)]
+    pub translate: crate::translate::TranslateStatus,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

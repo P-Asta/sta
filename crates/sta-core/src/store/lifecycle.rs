@@ -94,6 +94,7 @@ impl Store {
             r.can_go_forward = false;
             r.pending_typed = None;
             r.find_text.clear();
+            r.translate = crate::translate::TranslateStatus::Idle;
         }
         self.rt.permission_prompts.retain(|p| p.tab != id);
         if self.has_active_download(id) {

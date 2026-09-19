@@ -22,6 +22,7 @@ const SECTIONS = [
   { id: 'appearance', label: 'Appearance', icon: 'palette' },
   { id: 'animations', label: 'Animations', icon: 'play' },
   { id: 'search', label: 'Search', icon: 'search' },
+  { id: 'translation', label: 'Translation', icon: 'globe' },
   { id: 'tabs', label: 'Tabs', icon: 'archive' },
   { id: 'downloads', label: 'Downloads', icon: 'download' },
   { id: 'boosts', label: 'Boosts', icon: 'boost' },
@@ -240,6 +241,50 @@ function SearchSection({ settings, engines }) {
       <${CustomSearchUrl} value=${settings.customSearchUrl ?? ''} />
     </div>`}
     <${SuggestionsSetting} settings=${settings} engine=${current} />
+  <//>`;
+}
+
+/** Mirrors `TRANSLATE_LANGUAGES` in `crates/sta-core/src/model.rs`; core ignores any other code. */
+const TRANSLATE_LANGUAGES = [
+  ['en', 'English'],
+  ['ko', 'Korean'],
+  ['ja', 'Japanese'],
+  ['zh-CN', 'Chinese (Simplified)'],
+  ['zh-TW', 'Chinese (Traditional)'],
+  ['es', 'Spanish'],
+  ['fr', 'French'],
+  ['de', 'German'],
+  ['ru', 'Russian'],
+  ['pt', 'Portuguese'],
+  ['it', 'Italian'],
+  ['vi', 'Vietnamese'],
+  ['id', 'Indonesian'],
+  ['hi', 'Hindi'],
+  ['ar', 'Arabic'],
+];
+
+function TranslationSection({ settings }) {
+  const options = TRANSLATE_LANGUAGES.map(([value, label]) => ({ value, label }));
+  const current = settings.translateLanguage ?? 'en';
+  const name = TRANSLATE_LANGUAGES.find(([c]) => c === current)?.[1] ?? current;
+  return html`<${Section} id="translation" title="Translation">
+    <${Setting}
+      label="Translate pages into"
+      labelId="translate-label"
+      desc=${html`<span
+        >Right-click a page and choose <span class="set-code">Translate to ${name}</span>. Choosing it again puts the
+        original page back. To translate it, the page's text is sent to Google Translate.</span
+      >`}
+    >
+      <div class="set-select">
+        <${Select}
+          value=${current}
+          options=${options}
+          ariaLabel="Translate pages into"
+          onChange=${(v) => update({ translateLanguage: v })}
+        />
+      </div>
+    <//>
   <//>`;
 }
 
@@ -503,6 +548,8 @@ function Settings({ state }) {
       <${AnimationsSection} state=${state} />
 
       <${SearchSection} settings=${settings} engines=${state.searchEngines ?? []} />
+
+      <${TranslationSection} settings=${settings} />
 
       <${Section} id="tabs" title="Tabs">
         <div class="ip-setting is-stacked">

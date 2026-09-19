@@ -413,6 +413,9 @@ pub struct Settings {
     /// Which animations play, and how much motion at all (`crate::motion`). Not version-bumped:
     /// a profile from before this field loads the defaults (everything on, following Windows).
     pub animations: crate::motion::AnimationSettings,
+    /// Target language of "Translate page" (context menu), as an ISO-639-1 code the translation
+    /// endpoint understands (`en`, `ko`, `ja`, …). The source language is always detected.
+    pub translate_language: String,
     // ---------------------------------------------------------------- AI agents (MCP), docs/MCP.md
     /// Whether AI agents may connect through the MCP bridge. Unknown values load as `Off`.
     pub agent_access: AgentAccess,
@@ -437,6 +440,38 @@ pub struct Settings {
     pub agent_trusted_clients: Vec<AgentTrustedClient>,
 }
 
+/// The language "Translate page" starts out translating into. English, not the OS language: the
+/// pages a reader hits this for are far more often in a language they cannot read at all than in
+/// their own, and `Settings › Translation` changes it.
+pub fn default_translate_language() -> String {
+    "en".to_string()
+}
+
+/// Languages offered in Settings, as `(code, English name)`. The endpoint accepts far more; these
+/// are the ones the picker lists.
+pub const TRANSLATE_LANGUAGES: &[(&str, &str)] = &[
+    ("en", "English"),
+    ("ko", "Korean"),
+    ("ja", "Japanese"),
+    ("zh-CN", "Chinese (Simplified)"),
+    ("zh-TW", "Chinese (Traditional)"),
+    ("es", "Spanish"),
+    ("fr", "French"),
+    ("de", "German"),
+    ("ru", "Russian"),
+    ("pt", "Portuguese"),
+    ("it", "Italian"),
+    ("vi", "Vietnamese"),
+    ("id", "Indonesian"),
+    ("hi", "Hindi"),
+    ("ar", "Arabic"),
+];
+
+/// The display name for a stored language code (the code itself when it is not one we list).
+pub fn translate_language_name(code: &str) -> &str {
+    TRANSLATE_LANGUAGES.iter().find(|(c, _)| *c == code).map(|(_, name)| *name).unwrap_or(code)
+}
+
 impl Default for Settings {
     fn default() -> Self {
         Self {
@@ -450,6 +485,7 @@ impl Default for Settings {
             ask_download_location: false,
             search_suggestions: true,
             animations: crate::motion::AnimationSettings::default(),
+            translate_language: default_translate_language(),
             agent_access: AgentAccess::Off,
             agent_scope: AgentScope::AgentTabs,
             agent_sites: AgentSites::Ask,

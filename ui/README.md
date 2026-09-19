@@ -283,7 +283,8 @@ takes them from the Windows registry, which may say `text/plain` and leave every
   - `updateSettings` applies an `animations` patch the way core does (`motion-catalog.js`
     `applyAnimationsPatch`) and recomputes `state.motion`, so the Settings › Animations switches and
     the omnibox action work in mock mode.
-  - Accepted as no-ops: `toggleDevTools`, `print`, `viewSource`, `newBoostForSite`, `quit`, and
+  - Accepted as no-ops: `toggleDevTools`, `print`, `viewSource`, `newBoostForSite`, `quit`,
+    `translatePage` (the real one needs a page and the network), and
     any valid command without a reducer (with a `console.warn`).
   - Activating an unloaded tab sets `loading` for about 700 ms.
   - Opening a sidebar panel while the sidebar is hidden (also `sidebar=0&panel=…`) reveals it

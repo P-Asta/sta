@@ -519,6 +519,13 @@ pub enum Command {
     /// Context menu "Inspect" at page coordinates `x`/`y` (CSS pixels of the tab's page): opens
     /// DevTools if needed and selects the node at that point.
     InspectElement { tab: Id, x: i32, y: i32 },
+    /// Context menu "Translate to <language>": rewrite the tab's text (and the text sta can read
+    /// out of its images) into `settings.translate_language`. Running it on a tab that is already
+    /// translated puts the original page back, so the one menu item is both ways.
+    TranslatePage { tab: Id },
+    /// The shell finished (or gave up on) a `TranslatePage`, and says what to tell the user.
+    /// `strings` is how many pieces of text were rewritten, `images` how many images carried text.
+    TranslateFinished { tab: Id, strings: u32, images: u32, restored: bool, error: Option<String> },
 
     // ------------------------------------------------------------------ AI agent events (shell)
     /// An agent client said hello (shell-allocated request id). Core answers at once
@@ -604,6 +611,7 @@ impl Command {
                 | Command::DevToolsUndockRequested { .. }
                 | Command::DevToolsLinkRequested { .. }
                 | Command::InspectElement { .. }
+                | Command::TranslateFinished { .. }
                 | Command::AgentConnectionRequested { .. }
                 | Command::AgentSessionStarted { .. }
                 | Command::AgentSessionEnded { .. }
@@ -820,6 +828,8 @@ pub struct SettingsPatch {
     pub search_suggestions: Option<bool>,
     /// Animation settings (`crate::motion`): applied as `reset`, then the scalars, then the maps.
     pub animations: Option<crate::motion::AnimationsPatch>,
+    /// Target language of "Translate page"; ignored unless it is one of `TRANSLATE_LANGUAGES`.
+    pub translate_language: Option<String>,
     pub agent_access: Option<AgentAccess>,
     pub agent_scope: Option<AgentScope>,
     pub agent_sites: Option<AgentSites>,

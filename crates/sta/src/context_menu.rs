@@ -35,6 +35,7 @@ pub const CMD_COPY_LINK: i32 = USER_FIRST + 3;
 pub const CMD_OPEN_IMAGE_NEW_TAB: i32 = USER_FIRST + 4;
 pub const CMD_COPY_IMAGE_ADDRESS: i32 = USER_FIRST + 5;
 pub const CMD_INSPECT: i32 = USER_FIRST + 6;
+pub const CMD_TRANSLATE: i32 = USER_FIRST + 7;
 
 pub fn ui_handler() -> ContextMenuHandler {
     UiContextMenu::new()
@@ -72,6 +73,13 @@ fn labels(model: &MenuModel) -> Vec<String> {
     (0..model.count())
         .map(|i| if model.type_at(i) == MenuItemType::SEPARATOR { "-".to_string() } else { user_string(model.label_at(i)) })
         .collect()
+}
+
+/// "Translate to <language>", named from the current setting (English when core isn't readable).
+fn translate_label() -> String {
+    let code = controller::with_store(|s| s.state().settings.translate_language.clone()).unwrap_or_default();
+    let name = sta_core::model::translate_language_name(if code.is_empty() { "en" } else { &code });
+    format!("Translate to {name}")
 }
 
 /// `STA_TEST_CONTEXT_MENU` (debug builds only).
@@ -197,6 +205,9 @@ wrap_context_menu_handler! {
             if model.count() > 0 {
                 model.add_separator();
             }
+            // The language is in the label because this menu is where the user decides whether the
+            // item is the one they want; Settings › Translation changes it.
+            model.add_item(CMD_TRANSLATE, Some(&CefString::from(translate_label().as_str())));
             model.add_item(CMD_INSPECT, Some(&CefString::from("Inspect")));
             tidy_separators(model);
             log_debug!("context menu (tab): {}", labels(model).join(" | "));
@@ -238,6 +249,11 @@ wrap_context_menu_handler! {
                 CMD_OPEN_IMAGE_NEW_TAB => open(user_string(params.source_url()), LinkDisposition::BackgroundTab),
                 CMD_COPY_LINK => controller::dispatch(Command::CopyText { text: user_string(params.unfiltered_link_url()) }),
                 CMD_COPY_IMAGE_ADDRESS => controller::dispatch(Command::CopyText { text: user_string(params.source_url()) }),
+                CMD_TRANSLATE => {
+                    if let Some(tab) = tab_of(browser) {
+                        controller::dispatch(Command::TranslatePage { tab });
+                    }
+                }
                 // Inspect goes through core (which refuses `sta://` pages and opens the dock
                 // first); `devtools.rs` turns the point into a node on session S.
                 CMD_INSPECT => {

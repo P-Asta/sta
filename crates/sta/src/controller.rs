@@ -389,6 +389,7 @@ pub fn execute(effect: Effect) {
         Effect::CloseDevTools { tab } => crate::devtools::close(tab),
         Effect::FocusDevTools { tab } => crate::devtools::focus(tab),
         Effect::InspectAt { tab, x, y } => crate::devtools::inspect_at(tab, x, y),
+        Effect::TranslatePage { tab, target } => crate::translate::translate(tab, target),
         Effect::Print { tab } => tabs::print(tab),
         Effect::Find { tab, text, forward, match_case, find_next } => tabs::find(tab, &text, forward, match_case, find_next),
         Effect::StopFinding { tab } => tabs::stop_finding(tab),

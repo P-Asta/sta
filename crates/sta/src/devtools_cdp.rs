@@ -91,12 +91,17 @@ pub enum User {
     /// next document, and auto-attach to service workers, whose sessions only ever get
     /// `Runtime.evaluate` ([`worker_evaluate`]).
     Extensions,
+    /// "Translate page" (`translate.rs`): reads the page's text out of a tab and writes the
+    /// translation back. `Runtime.evaluate` in the tab's own main world is the whole of it — the
+    /// point is to change what the page renders, so an isolated world would be useless.
+    Translate,
 }
 
 impl User {
     pub fn methods(self) -> &'static [&'static str] {
         match self {
             User::Debug => &["Target.createTarget"],
+            User::Translate => &["Runtime.evaluate"],
             User::Extensions => &["Runtime.evaluate", "Page.enable", "Page.addScriptToEvaluateOnNewDocument", "Target.setAutoAttach", "Target.detachFromTarget"],
             User::DevTools => &[
                 "DOM.describeNode",

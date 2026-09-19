@@ -288,6 +288,7 @@ pub fn teardown() {
     crate::update::clear();
     ipc::clear();
     crate::automation::clear();
+    crate::translate::clear();
     crate::devtools_cdp::clear();
     crate::foreign::clear();
     crate::ext_popup::clear();

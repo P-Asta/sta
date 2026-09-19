@@ -257,6 +257,29 @@ impl Store {
                 self.toast("Copied", None);
             }
 
+            // -------------------------------------------------------------- translation
+            // Whether this translates or restores is the page's to answer, so there is no toast
+            // yet: the shell sends `TranslateFinished` once it knows.
+            Command::TranslatePage { tab } => {
+                if self.is_live(tab) {
+                    let target = self.state.settings.translate_language.clone();
+                    fx.push(Effect::TranslatePage { tab, target });
+                }
+            }
+            Command::TranslateFinished { tab, strings, images, restored, error } => {
+                let _ = tab;
+                let name = crate::model::translate_language_name(&self.state.settings.translate_language);
+                match error {
+                    Some(e) => self.toast(format!("Couldn't translate this page — {e}"), None),
+                    None if restored => self.toast("Showing the original page", None),
+                    None if strings == 0 && images == 0 => self.toast("Nothing to translate on this page", None),
+                    None if images > 0 => {
+                        self.toast(format!("Translated to {name} — {strings} texts and {images} images"), None)
+                    }
+                    None => self.toast(format!("Translated to {name} — {strings} texts"), None),
+                }
+            }
+
             // -------------------------------------------------------------- updates
             // The shell decides what is possible and reports it back (`UpdateStatusChanged`); these
             // only ask, and only when the status says the ask makes sense — a page cannot start a
@@ -1163,6 +1186,13 @@ impl Store {
         }
         if let Some(a) = patch.animations.as_ref() {
             s.animations.apply_patch(a);
+        }
+        // An unknown code would leave every later translation failing with an endpoint error the
+        // user could not connect to this setting, so only offered languages are accepted.
+        if let Some(v) = patch.translate_language.as_deref()
+            && crate::model::TRANSLATE_LANGUAGES.iter().any(|(c, _)| *c == v)
+        {
+            s.translate_language = v.to_string();
         }
         self.touch();
     }

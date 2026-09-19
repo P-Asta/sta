@@ -88,6 +88,7 @@ mod task;
 /// `--sta-test-hooks` + `STA_E2E=1` + an explicit test data directory.
 #[cfg(all(debug_assertions, feature = "test-hooks"))]
 mod test_hooks;
+mod translate;
 mod unzip;
 mod update;
 mod window;

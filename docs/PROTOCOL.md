@@ -468,8 +468,24 @@ color seamlessly. Overlay pages use `--surface` with a 1px `--border`.
 
 Shell-only (never from the UI; the shell sends them, see §10, §11, §12 and §14): `systemAnimationsChanged`, `foreignTabRequested`,
 `extensionInstalled`, `foreignBlocked`, `lowDiskSpace`, `devToolsClosed`, `devToolsUndockRequested`,
-`devToolsLinkRequested`, `inspectElement`, `extensionsChanged`, `extensionDetailsLoaded`,
+`devToolsLinkRequested`, `inspectElement`, `translateFinished`, `extensionsChanged`, `extensionDetailsLoaded`,
 `extensionOpFailed`, `extensionPopupClosed`, `safeModeStarted`.
+
+### Translation
+
+```jsonc
+{"type":"translatePage","tab":7}                                  // context menu "Translate to <language>"
+{"type":"updateSettings","patch":{"translateLanguage":"ko"}}      // Settings › Translation
+```
+
+| Command | Payload | What it does |
+| --- | --- | --- |
+| `translatePage` | `{tab}` | Rewrites the tab's text into `settings.translateLanguage`, or puts the original back when the page is already translated — the page itself is the record of which, so core always emits the same `TranslatePage` effect and hears the outcome back. |
+| `translateFinished` | `{tab, strings, images, restored, error}` | **Shell-only.** What `crates/sta/src/translate.rs` did, so core can raise the toast. `error` is `null` on success. |
+
+A page's text leaves the machine: the shell batches it to Google's free `translate_a/t` endpoint
+over CEF's network stack (no cookies, no credentials). An unknown `translateLanguage` is ignored
+rather than stored, so the setting can never leave translation permanently broken.
 
 ## 9. AI agents (MCP)
 

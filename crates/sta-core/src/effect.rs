@@ -70,6 +70,10 @@ pub enum Effect {
     FocusDevTools { tab: Id },
     /// Select the node at `x`/`y` (CSS pixels of the tab's page) in the tab's DevTools.
     InspectAt { tab: Id, x: i32, y: i32 },
+    /// Translate the tab's page into `target` (an ISO-639-1 code), or, if the shell already
+    /// translated it, put the original back. Core does not track which of the two it will be — the
+    /// page itself is the record — so the shell reports what happened with `TranslateFinished`.
+    TranslatePage { tab: Id, target: String },
     Print { tab: Id },
     Find { tab: Id, text: String, forward: bool, match_case: bool, find_next: bool },
     StopFinding { tab: Id },

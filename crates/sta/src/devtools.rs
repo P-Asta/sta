@@ -1233,16 +1233,16 @@ wrap_keyboard_handler! {
             &self,
             browser: Option<&mut Browser>,
             event: Option<&KeyEvent>,
-            _os_event: Option<&mut cef::sys::MSG>,
+            _os_event: crate::platform::OsEvent<'_>,
             _is_keyboard_shortcut: Option<&mut i32>,
         ) -> i32 {
             let (Some(browser), Some(event)) = (browser, event) else { return 0 };
             crate::keyboard::on_pre_key_event(browser.identifier(), event) as i32
         }
 
-        fn on_key_event(&self, browser: Option<&mut Browser>, event: Option<&KeyEvent>, os_event: Option<&mut cef::sys::MSG>) -> i32 {
+        fn on_key_event(&self, browser: Option<&mut Browser>, event: Option<&KeyEvent>, os_event: crate::platform::OsEvent<'_>) -> i32 {
             let (Some(browser), Some(event)) = (browser, event) else { return 0 };
-            crate::keyboard::on_key_event(browser.identifier(), event, os_event.is_some()) as i32
+            crate::keyboard::on_key_event(browser.identifier(), event, crate::platform::os_event_present(&os_event)) as i32
         }
     }
 }

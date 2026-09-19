@@ -6,6 +6,10 @@
 //! produce — an archive that does not look like one of those has no business being unpacked over
 //! somebody's browser.
 //!
+//! Unix file modes travel in the central directory (the archives are made by `zip`/`ditto` on
+//! macOS), and the executable bit is restored from them: a browser whose binaries come out of an
+//! update without `+x` cannot start itself.
+//!
 //! What it checks, beyond the format:
 //! - every entry's path must stay **inside** the destination: no absolute paths, no drive letters,
 //!   no `..` segment, no NUL. (A "zip slip" writes `..\..\Windows\System32\…` and is the reason
@@ -30,6 +34,8 @@ const ZIP64_MARKER: u32 = 0xFFFF_FFFF;
 
 const STORED: u16 = 0;
 const DEFLATED: u16 = 8;
+/// `version made by` upper byte 3: the modes in the external attributes are Unix ones.
+const UNIX_HOST: u16 = 3;
 
 /// One file in the archive (directories are not listed: their paths are created as files need them).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -42,6 +48,8 @@ pub struct Entry {
     pub crc32: u32,
     /// Offset of the entry's local header in the archive.
     pub offset: u32,
+    /// The Unix mode the archive recorded (`version made by` = UNIX), if any.
+    pub unix_mode: Option<u32>,
 }
 
 fn u16_at(bytes: &[u8], at: usize) -> Result<u16, String> {
@@ -78,13 +86,15 @@ pub fn entries(bytes: &[u8]) -> Result<Vec<Entry>, String> {
         if u32_at(bytes, at)? != CENTRAL_SIGNATURE {
             return Err(format!("entry {i} has no central directory header"));
         }
-        let method = u16_at(bytes, at + 10)?;
+        let made_by = u16_at(bytes, at + 4)?;
         let crc32 = u32_at(bytes, at + 16)?;
         let compressed_size = u32_at(bytes, at + 20)?;
         let size = u32_at(bytes, at + 24)?;
+        let method = u16_at(bytes, at + 10)?;
         let name_len = u16_at(bytes, at + 28)? as usize;
         let extra_len = u16_at(bytes, at + 30)? as usize;
         let comment_len = u16_at(bytes, at + 32)? as usize;
+        let external_attributes = u32_at(bytes, at + 38)?;
         let offset = u32_at(bytes, at + 42)?;
         if compressed_size == ZIP64_MARKER || size == ZIP64_MARKER || offset == ZIP64_MARKER {
             return Err("zip64 entries are not supported".to_string());
@@ -94,7 +104,10 @@ pub fn entries(bytes: &[u8]) -> Result<Vec<Entry>, String> {
             .ok_or("truncated entry name")
             .and_then(|b| std::str::from_utf8(b).map_err(|_| "entry name is not UTF-8"))?
             .to_string();
-        out.push(Entry { name, method, compressed_size, size, crc32, offset });
+        // "Version made by": the upper byte is the host system, 3 = UNIX, and then the upper 16
+        // bits of the external attributes are the `st_mode` the file had.
+        let unix_mode = (made_by >> 8 == UNIX_HOST).then_some(external_attributes >> 16).filter(|m| *m != 0);
+        out.push(Entry { name, method, compressed_size, size, crc32, offset, unix_mode });
         at += 46 + name_len + extra_len + comment_len;
     }
     Ok(out)
@@ -180,9 +193,26 @@ pub fn extract(bytes: &[u8], into: &Path) -> Result<usize, String> {
             fs::create_dir_all(parent).map_err(|e| format!("{}: {e}", parent.display()))?;
         }
         fs::write(&path, &data).map_err(|e| format!("{}: {e}", path.display()))?;
+        restore_mode(&path, entry.unix_mode)?;
         written += 1;
     }
     Ok(written)
+}
+
+/// Gives the extracted file the archive's executable bits back (Unix only; the mode a ZIP carries
+/// is otherwise ignored, so an odd archive cannot make a file unreadable). The updater starts the
+/// staged build to apply itself: without this, the new binaries are not executable.
+#[cfg(unix)]
+fn restore_mode(path: &Path, unix_mode: Option<u32>) -> Result<(), String> {
+    use std::os::unix::fs::PermissionsExt;
+    let Some(mode) = unix_mode.filter(|m| m & 0o111 != 0) else { return Ok(()) };
+    let permissions = fs::Permissions::from_mode(0o644 | (mode & 0o111));
+    fs::set_permissions(path, permissions).map_err(|e| format!("{}: {e}", path.display()))
+}
+
+#[cfg(not(unix))]
+fn restore_mode(_path: &Path, _unix_mode: Option<u32>) -> Result<(), String> {
+    Ok(())
 }
 
 #[cfg(test)]
@@ -190,11 +220,17 @@ mod tests {
     use super::*;
     use std::io::Write;
 
-    /// Builds a ZIP in memory: `(name, contents, deflate)`.
+    /// Builds a ZIP in memory: `(name, contents, deflate)`, with no recorded file modes.
     fn zip(files: &[(&str, &[u8], bool)]) -> Vec<u8> {
+        zip_with_modes(&files.iter().map(|(n, d, z)| (*n, *d, *z, 0u32)).collect::<Vec<_>>())
+    }
+
+    /// Builds a ZIP in memory: `(name, contents, deflate, unix mode)` — a mode of 0 is recorded the
+    /// way a Windows zipper does (no host system, no attributes).
+    fn zip_with_modes(files: &[(&str, &[u8], bool, u32)]) -> Vec<u8> {
         let mut out: Vec<u8> = Vec::new();
         let mut central: Vec<u8> = Vec::new();
-        for (name, data, deflate) in files {
+        for (name, data, deflate, unix_mode) in files {
             let offset = out.len() as u32;
             let mut crc = flate2::Crc::new();
             crc.update(data);
@@ -226,7 +262,8 @@ mod tests {
             out.extend_from_slice(&payload);
             // Central directory entry.
             let mut c = header(CENTRAL_SIGNATURE, &[]);
-            c.extend_from_slice(&20u16.to_le_bytes()); // version made by
+            let made_by = if *unix_mode == 0 { 20u16 } else { (UNIX_HOST << 8) | 20 };
+            c.extend_from_slice(&made_by.to_le_bytes()); // version made by
             c.extend_from_slice(&20u16.to_le_bytes()); // version needed
             c.extend_from_slice(&0u16.to_le_bytes()); // flags
             c.extend_from_slice(&method.to_le_bytes());
@@ -236,7 +273,8 @@ mod tests {
             c.extend_from_slice(&(data.len() as u32).to_le_bytes());
             c.extend_from_slice(&(name.len() as u16).to_le_bytes());
             c.extend_from_slice(&[0; 6]); // extra len, comment len, disk number
-            c.extend_from_slice(&[0; 6]); // internal (2) and external (4) attributes
+            c.extend_from_slice(&[0; 2]); // internal attributes
+            c.extend_from_slice(&(unix_mode << 16).to_le_bytes()); // external attributes
             c.extend_from_slice(&offset.to_le_bytes());
             c.extend_from_slice(name.as_bytes());
             central.extend_from_slice(&c);
@@ -273,6 +311,29 @@ mod tests {
         assert_eq!(fs::read(dir.join("sta.exe")).unwrap(), b"MZ fake");
         assert_eq!(fs::read_to_string(dir.join("locales").join("en-US.pak")).unwrap(), big);
         fs::remove_dir_all(&dir).ok();
+    }
+
+    /// The updater starts the staged browser to apply itself: an archive made on macOS carries the
+    /// executable bit, and it has to survive the trip.
+    #[cfg(unix)]
+    #[test]
+    fn the_executable_bit_survives() {
+        use std::os::unix::fs::PermissionsExt;
+        let archive = zip_with_modes(&[
+            ("sta.app/Contents/MacOS/sta", b"\x7fELF", false, 0o100_755),
+            ("sta.app/Contents/Info.plist", b"<plist/>", false, 0o100_644),
+            ("no-mode.txt", b"x", false, 0),
+        ]);
+        let list = entries(&archive).expect("entries");
+        assert_eq!(list[0].unix_mode, Some(0o100_755));
+        assert_eq!(list[2].unix_mode, None, "an archive without host modes says nothing");
+
+        let dir = temp_dir("modes");
+        assert_eq!(extract(&archive, &dir).expect("extract"), 3);
+        let mode = |name: &str| fs::metadata(dir.join(name)).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode("sta.app/Contents/MacOS/sta"), 0o755);
+        assert_eq!(mode("sta.app/Contents/Info.plist") & 0o111, 0, "not executable, and left alone");
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]

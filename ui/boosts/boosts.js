@@ -11,7 +11,7 @@ import { Button, Popover, TextField, Toggle } from '/common/components.js';
 import { useLatest } from '/common/hooks.js';
 import { ConfirmButton, EmptyState, PageHeader, mountPage, useNavIndicator } from '/common/internal-page.js';
 import * as motion from '/common/motion.js';
-import { classNames } from '/common/util.js';
+import { classNames, shortcut } from '/common/util.js';
 
 const report = (e) => console.error('[boosts]', e);
 const send = (command) => dispatch(command).catch(report);
@@ -374,7 +374,7 @@ function Editor({ id, summary, controller, onDeleted }) {
           onDeleted(id);
         }}
       />
-      <${Button} variant="primary" icon="check" disabled=${!dirty} onClick=${save} title="Save (Ctrl+S)">Save<//>
+      <${Button} variant="primary" icon="check" disabled=${!dirty} onClick=${save} title=${`Save (${shortcut('Ctrl+S')})`}>Save<//>
     </footer>
   </div>`;
 }

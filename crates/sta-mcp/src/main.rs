@@ -26,6 +26,8 @@ compile_error!("the `test-hooks` feature is debug-only: it must never be built i
 
 mod channel;
 mod server;
+#[cfg(unix)]
+mod unix;
 #[cfg(windows)]
 mod win;
 

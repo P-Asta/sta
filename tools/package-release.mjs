@@ -23,6 +23,7 @@
 // releases are not served by that URL, which is exactly why the workflow leaves a draft: nothing
 // updates until a person publishes it.
 
+import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
@@ -44,6 +45,10 @@ export function platformKey(platform = process.platform, arch = process.arch) {
  *
  * Windows: the two binaries plus the CEF runtime that `cef-dll-sys` drops beside them. `*.pdb`,
  * `*.lib`, `*.d`, `CMakeLists.txt` and the other build leftovers are deliberately not in it.
+ *
+ * macOS: nothing is copied file by file — the browser assembles its own app bundle
+ * (`assemble` below, `crates/sta/src/platform/mac_bundle.rs`), and `required` then says what that
+ * bundle must contain before the archive is allowed to exist.
  */
 const PAYLOAD = {
   win32: {
@@ -69,9 +74,28 @@ const PAYLOAD = {
     directories: ['locales'],
   },
   darwin: {
-    // The macOS shell does not exist yet (docs/STATUS.md): when it does, this is where its app
-    // bundle goes, and the workflow's `macos` job stops being skipped.
-    required: [],
+    // Built, not copied: `sta --sta-bundle-mac=<dir>` writes `<dir>/sta.app` with the CEF framework
+    // and the helper apps inside it, and the bridge goes next to the browser in `Contents/MacOS`
+    // (which is where it looks for it, `crates/sta-mcp/src/channel.rs`).
+    assemble({ targetDir, dir }) {
+      const browser = join(targetDir, 'sta');
+      const bridge = join(targetDir, 'sta-mcp');
+      for (const binary of [browser, bridge]) {
+        if (!existsSync(binary)) throw new Error(`${targetDir} is missing ${basename(binary)}`);
+      }
+      // console-ok: the bundler is not a console program and this only runs on macOS.
+      const built = spawnSync(browser, ['--sta-bundle-mac=' + dir], { encoding: 'utf8', windowsHide: true });
+      if (built.status !== 0) throw new Error(`sta --sta-bundle-mac failed: ${built.stderr?.trim() || built.error?.message || built.status}`);
+      cpSync(bridge, join(dir, 'sta.app', 'Contents', 'MacOS', 'sta-mcp'));
+    },
+    required: [
+      'sta.app/Contents/Info.plist',
+      'sta.app/Contents/MacOS/sta',
+      'sta.app/Contents/MacOS/sta-mcp',
+      'sta.app/Contents/Frameworks/sta Helper.app/Contents/MacOS/sta Helper',
+      'sta.app/Contents/Frameworks/Chromium Embedded Framework.framework/Chromium Embedded Framework',
+      'sta.app/Contents/Frameworks/Chromium Embedded Framework.framework/Resources/icudtl.dat',
+    ],
     optional: [],
     directories: [],
   },
@@ -123,7 +147,7 @@ function stage(args) {
   const payload = PAYLOAD[process.platform];
   if (!payload) throw new Error(`no release payload defined for ${process.platform}`);
   if (!payload.required.length) {
-    throw new Error(`sta has no ${process.platform} build yet (docs/STATUS.md "Windows only"); nothing to package`);
+    throw new Error(`sta has no ${process.platform} build yet (docs/STATUS.md); nothing to package`);
   }
   if (!existsSync(targetDir)) throw new Error(`${targetDir} does not exist: run cargo build --release -p sta -p sta-mcp first`);
 
@@ -131,16 +155,19 @@ function stage(args) {
   const dir = join(out, name);
   rmSync(dir, { recursive: true, force: true });
   mkdirSync(dir, { recursive: true });
+  // A platform whose payload builds itself (macOS) fills the staging directory first; `required`
+  // is then checked against what it produced instead of against the target directory.
+  payload.assemble?.({ targetDir, dir });
 
   const missing = [];
   let bytes = 0;
   const copy = (entry, optional = false) => {
-    const from = join(targetDir, entry);
+    const from = payload.assemble ? join(dir, entry) : join(targetDir, entry);
     if (!existsSync(from)) {
       if (!optional) missing.push(entry);
       return;
     }
-    cpSync(from, join(dir, entry), { recursive: true });
+    if (!payload.assemble) cpSync(from, join(dir, entry), { recursive: true });
     const walk = (p) => (statSync(p).isDirectory() ? readdirSync(p).forEach((c) => walk(join(p, c))) : (bytes += statSync(p).size));
     walk(from);
   };
@@ -148,7 +175,8 @@ function stage(args) {
   for (const entry of payload.optional) copy(entry, true);
   for (const entry of payload.directories) copy(entry);
   if (missing.length) {
-    throw new Error(`${targetDir} is missing ${missing.join(', ')} — the archive would not start. Build with:\n  cargo build --release -p sta -p sta-mcp`);
+    const where = payload.assemble ? dir : targetDir;
+    throw new Error(`${where} is missing ${missing.join(', ')} — the archive would not start. Build with:\n  cargo build --release -p sta -p sta-mcp`);
   }
 
   // A release build must never carry the debug-only MCP test surface (tools/check-release-clean.mjs

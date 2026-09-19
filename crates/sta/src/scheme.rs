@@ -81,7 +81,7 @@ pub fn scheme_options() -> i32 {
         SchemeOptions::DISPLAY_ISOLATED,
     ]
     .iter()
-    .fold(0, |acc, o| acc | o.get_raw())
+    .fold(0, |acc, o| acc | o.get_raw() as i32)
 }
 
 /// Registers the scheme. Must run in every process with identical options.

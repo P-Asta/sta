@@ -42,7 +42,6 @@
 
 use crate::browsers::{self, Role};
 use crate::{controller, devtools_cdp, external, overlays, task, window};
-use cef::sys::MSG;
 use cef::*;
 use serde_json::{Value, json};
 use sta_core::{Command, Id, OpenTarget};
@@ -549,7 +548,7 @@ wrap_keyboard_handler! {
             &self,
             browser: Option<&mut Browser>,
             event: Option<&KeyEvent>,
-            _os_event: Option<&mut MSG>,
+            _os_event: crate::platform::OsEvent<'_>,
             _is_keyboard_shortcut: Option<&mut i32>,
         ) -> i32 {
             let (Some(browser), Some(event)) = (browser, event) else { return 0 };

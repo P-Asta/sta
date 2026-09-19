@@ -1,6 +1,6 @@
 # sta
 
-> **Rust + CEF(Chromium Embedded Framework)로 만든 Arc 스타일 데스크톱 브라우저** (Windows 11).
+> **Rust + CEF(Chromium Embedded Framework)로 만든 Arc 스타일 데스크톱 브라우저** (Windows 11 · macOS).
 > 세로 사이드바, 스페이스, 즐겨찾기·고정 탭·Today 탭, 자동 아카이브, 커맨드 바, 분할 화면, Peek, Boosts 등
 > Arc 브라우저의 핵심 경험을 Chromium 152 엔진 위에 구현했습니다. Claude Code 같은 AI 에이전트가 MCP로
 > 브라우저를 안전하게 쓸 수 있습니다([한국어 안내](docs/MCP.ko.md)).
@@ -51,15 +51,19 @@
 > 비울 시간을 그대로 받으므로 다음에 다시 나타날 때 지난 프레임이 번쩍이는 일이 없습니다. 커맨드 바의
 > **Turn Animations Off/On**으로도 한 번에 바꿀 수 있습니다.
 
-An Arc-style browser for Windows built on **CEF 152 (Chromium 152)** via the
+An Arc-style browser for Windows and macOS built on **CEF 152 (Chromium 152)** via the
 [`cef`](https://crates.io/crates/cef) crate, written in Rust. The browser chrome is HTML/CSS/JS
 served from a custom `sta://` scheme; all state lives in a deterministic, unit-tested Rust
 core.
 
+On macOS the shortcuts below are **⌘** instead of Ctrl (⌘T, ⌘W, ⌘L, …), exactly as they are written
+in every other Mac browser; what else differs is in [macOS](#macos).
+
 ## Features
 
-- **Frameless Arc-style window** with a themed vertical sidebar, custom top bar and Windows 11
-  caption buttons, native snap/resize, rounded corners and dark title bar integration.
+- **Frameless Arc-style window** with a themed vertical sidebar and custom top bar — Windows 11
+  caption buttons, native snap/resize, rounded corners and dark title bar integration there; the
+  traffic lights, native full screen and the system appearance on macOS.
 - **Rounded chrome**: web pages sit in a rounded content card (10 px, the focused split pane's
   accent ring and the AI agent frame follow the corners); the command bar, find bar, permission
   prompt, AI agent prompts and panel, switcher, toast, Peek (page corners included) and the floating
@@ -153,10 +157,10 @@ core.
     unloaded and a banner in Settings › Extensions, so an extension that crashes the browser can be
     turned off.
 - **Animations you choose** (Settings › Animations): one switch for all of them, "Follow Windows
-  animation effects" (with a line that tells you when Windows has them off and sta is therefore using
-  reduced motion), and then 36 animations in 8 groups — sidebar and top bar, command bar, overlays,
-  menus, pages, theme, controls, indicators — each with a group switch, an "n of m on" count and a
-  one-line description, plus Reset to defaults. Turning a group off greys its animations without
+  animation effects" ("Follow Reduce motion" on macOS, with a line that tells you when the system
+  setting has sta using reduced motion), and then 36 animations in 8 groups — sidebar and top bar,
+  command bar, overlays, menus, pages, theme, controls, indicators — each with a group switch, an
+  "n of m on" count and a one-line description, plus Reset to defaults. Turning a group off greys its animations without
   locking them, so you can set one up before you switch its group back on. Off means *instant*, not
   *broken*: loading still shows, as a still ring or bar, and a surface still gets the moment it needs
   to clear itself before it disappears, so nothing ever flashes the previous frame. The command bar
@@ -175,6 +179,10 @@ core.
   [AI agents](#ai-agents-mcp), [`docs/MCP.md`](docs/MCP.md), [한국어](docs/MCP.ko.md)).
 
 ### Keyboard shortcuts (Arc for Windows mappings)
+
+**On macOS, read every `Ctrl` below as `⌘`** (and `Alt` as `⌥`): it is one table, mapped to the
+platform's own modifier. One row differs there — **history is ⌘Y**, because ⌘H hides the app — and
+the F-keys need `fn` unless the keyboard is set to send function keys.
 
 | Keys | Action |
 |---|---|
@@ -277,11 +285,50 @@ cargo build -p sta            # first build downloads CEF (~600 MB) into .cef/
 cargo build -p sta --release  # UI assets are embedded in release builds
 ```
 
+Prerequisites (macOS 11+, Apple silicon or Intel):
+- Rust stable;
+- Xcode command line tools (`xcode-select --install`);
+- CMake and Ninja on `PATH` (`brew install cmake ninja`) — the CEF C++ wrapper is built from source;
+- Node.js 22+ (only for the test tools).
+
+```bash
+cargo build -p sta            # first build downloads CEF (~600 MB) into .cef/
+./target/debug/sta            # assembles target/debug/sta.app and runs it
+cargo build -p sta --release  # UI assets are embedded in release builds
+```
+
 - The first build downloads CEF into `.cef/`. Keep the checkout on a short path, because the CEF
   wrapper's CMake build fails under very long directories.
-- `libcef.dll`, the `.pak` files and `locales/` are copied next to the executable automatically.
-- User data lives in `%LOCALAPPDATA%\sta` (release) or `%LOCALAPPDATA%\sta Dev` (debug).
+- Windows: `libcef.dll`, the `.pak` files and `locales/` are copied next to the executable
+  automatically.
+- macOS: a CEF app has to run from an app bundle, so the debug binary builds one around itself
+  (`target/debug/sta.app`, with the framework symlinked and the helper processes hard-linked) and
+  re-executes into it — `cargo run` just works, and the terminal keeps the process and its output.
+  `./target/release/sta --sta-bundle-mac[=<dir>]` writes a standalone bundle instead and exits;
+  that is what a release archive holds.
+- User data lives in `%LOCALAPPDATA%\sta` (release) or `%LOCALAPPDATA%\sta Dev` (debug) on Windows,
+  and in `~/Library/Application Support/sta` (or `sta Dev`) on macOS.
 - Override the data location with `--sta-data-dir=<path>`.
+
+### macOS
+
+The core, the UI and the browser itself are the same build; what the platform changes:
+
+- **Shortcuts are ⌘-based.** The [shortcut table](#keyboard-shortcuts-arc-for-windows-mappings) is
+  written with Ctrl and read as ⌘ (⌘T, ⌘W, ⌘⇧C, ⌘1…9); the UI writes them that way too. **History is
+  ⌘Y**, because ⌘H hides the app. Ctrl itself is left to macOS and to the page.
+- **The menu bar** holds the application and editing commands macOS expects (About, Hide, Quit,
+  Undo/Cut/Copy/Paste/Select All). ⌘Q closes sta the way its own close button does — the session is
+  saved first. sta's own shortcuts are deliberately *not* menu items: a menu key equivalent would
+  take the key before the page or the shell ever saw it.
+- **The window** has the traffic lights in a strip above the top bar rather than caption buttons
+  inside it, and follows the system appearance (dark/light) and "Reduce motion".
+- **AI agents** reach the browser through a Unix domain socket in the data directory
+  (mode 0600, `agent.sock`) instead of a named pipe; the MCP bridge checks who serves it the same
+  way ([`docs/MCP.md`](docs/MCP.md)).
+- **Not there yet**: the Chrome-created-window plumbing (extension popups and sign-in windows stay
+  Chromium's own windows), the sidebar's pointer-reveal keep-zone across owned popups, and the
+  end-to-end suites, which drive real Win32 input. See [Known limitations](#known-limitations).
 
 ## Renamed from Astatine <!-- rename:keep -->
 
@@ -400,8 +447,11 @@ surface with `?mock` (see `ui/README.md`).
 
 ## Known limitations
 
-- **Windows only for now.** The core and UI are platform-neutral; the shell uses Win32 for DWM,
-  clipboard and shell integration.
+- **Windows and macOS.** The core and UI are platform-neutral; the shell has a Win32 half and a
+  Cocoa half (`crates/sta/src/platform/`). On macOS the windows Chromium opens for itself —
+  extension popups, sign-in flows — are not adopted into sta's chrome the way they are on Windows,
+  and the debug-only end-to-end suites are Windows-only because they drive real Win32 input. Linux
+  builds are not set up.
 - **Chrome extensions run, and Ctrl+E uses them, but sta has no extension toolbar.** Extensions
   installed from the Chrome Web Store work in sta's tabs: service workers, content scripts, blocking
   rules (ad blockers really block), extension pages and options pages. **Ctrl+E** opens a picker that

@@ -2,12 +2,19 @@
 
 sta는 Claude Code, Claude Desktop, VS Code, Cursor 같은
 [MCP(Model Context Protocol)](https://modelcontextprotocol.io/) 클라이언트가 브라우저를 사용할 수 있게
-해 주는 MCP 서버 `sta-mcp.exe`를 함께 제공합니다. 이 문서는 한국어 요약 안내이며, 모든 도구의
-입력·출력·오류와 보안 모델 전체는 영어 참조 문서 [`docs/MCP.md`](MCP.md)에 있습니다.
+해 주는 MCP 서버 `sta-mcp.exe`(macOS에서는 `sta-mcp`)를 함께 제공합니다. 이 문서는 한국어 요약
+안내이며, 모든 도구의 입력·출력·오류와 보안 모델 전체는 영어 참조 문서
+[`docs/MCP.md`](MCP.md)에 있습니다.
 
 ```
-MCP 클라이언트 ──stdio──► sta-mcp.exe ──로컬 named pipe(현재 Windows 사용자 전용)──► sta.exe
+MCP 클라이언트 ──stdio──► sta-mcp ──로컬 채널(현재 사용자 전용)──► sta
+                                    Windows: named pipe
+                                    macOS:   <데이터 폴더>/sta/agent.sock (권한 0600)
 ```
+
+macOS에서는 `sta-mcp`가 앱 번들 안(`sta.app/Contents/MacOS/sta-mcp`)에 있고, 프로필은
+`~/Library/Application Support/sta`(디버그 빌드는 `sta Dev`)입니다. 아래 경로 예시는 Windows
+기준입니다.
 
 - **기본값은 꺼짐**입니다. 설정에서 켜기 전에는 아무것도 대기하지 않습니다.
 - 브라우저는 원격 디버깅 포트를 열지 않고, 자기 프로세스 안의 DevTools 연결로 페이지를 다룹니다.
@@ -19,7 +26,8 @@ MCP 클라이언트 ──stdio──► sta-mcp.exe ──로컬 named pipe(현
 
 1. sta를 설치하거나 빌드합니다. `sta-mcp.exe`는 `sta.exe`와 같은 폴더에 있습니다
    (`cargo build -p sta -p sta-mcp` → `target\debug\`, 디버그 빌드의 프로필은
-   `%LOCALAPPDATA%\sta Dev`).
+   `%LOCALAPPDATA%\sta Dev`). macOS에서는 `target/debug/sta-mcp`이고, 프로필은
+   `~/Library/Application Support/sta Dev`입니다.
 2. **설정 → AI agents (MCP) → Agent access**를 *Full*(전체) 또는 *Read only*(읽기 전용)로 바꿉니다.
 3. 같은 화면의 **Connect a client**에서 쓰는 클라이언트를 고르고 설정을 복사해 등록합니다. 이
    설치본의 경로(기본이 아닌 프로필이면 `--data-dir`까지)가 들어간 설정이 표시됩니다. 아래 예시의
@@ -30,6 +38,11 @@ MCP 클라이언트 ──stdio──► sta-mcp.exe ──로컬 named pipe(현
 5. 에이전트에게 브라우저 작업을 요청하면 처음 한 번 sta 창 오른쪽 위에 승인 창이 뜹니다.
 
 ### Claude Code
+
+```bash
+# macOS
+claude mcp add sta -s user -- /Applications/sta.app/Contents/MacOS/sta-mcp
+```
 
 ```powershell
 # 모든 프로젝트에서 사용 (~/.claude.json)
@@ -186,10 +199,15 @@ sta가 꺼져 있고 접근이 켜진 상태로 저장되어 있으면, 첫 도�
 - **"항상 허용"은 신원 확인이 아니라 동의입니다.** 실행 파일 경로와 서명자로 기억합니다. npm으로 설치한
   Claude Code는 `node.exe`(OpenJS Foundation 서명)로 실행되므로, 이를 신뢰하면 Node 기반의 다른 MCP
   클라이언트도 신뢰하게 됩니다.
-- 같은 Windows 사용자 권한으로 실행되는 악성 프로그램은 막을 수 없습니다(다른 사용자, 낮은 무결성
-  수준·AppContainer 프로세스, 웹 페이지는 파이프에 접근할 수 없음). MCP 서버는 연결 전에 파이프의
+- 같은 사용자 권한으로 실행되는 악성 프로그램은 막을 수 없습니다(다른 사용자, 낮은 무결성
+  수준·AppContainer 프로세스, 웹 페이지는 채널에 접근할 수 없음). MCP 서버는 연결 전에 파이프의
   소유자·세션·무결성 수준(medium 이상)·서버 프로세스를 확인하므로, 낮은 무결성 프로세스가 파이프 이름을
   가로채 브라우저인 척할 수도 없습니다(`endpoint_untrusted`).
+- macOS에서는 소켓이 사용자 데이터 폴더 안에 권한 0600으로 만들어지고, 브라우저는 uid가 다른
+  클라이언트를 끊습니다. MCP 서버도 쓰기 전에 커널에서 상대의 uid와 pid를 직접 확인해
+  엔드포인트 파일이 가리키는 프로세스가 맞는지 검사합니다
+  (`getsockopt(SOL_LOCAL, LOCAL_PEERCRED/LOCAL_PEERPID)`). 다만 서명자 확인이 없으므로
+  **"항상 허용"은 macOS에서 제공되지 않습니다**.
 
 ## 4-1. 디버그 전용 테스트 도구 (개발자용)
 

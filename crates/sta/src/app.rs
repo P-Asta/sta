@@ -51,6 +51,13 @@ wrap_app! {
             // (The permission auto-blocker has no feature switch in Chromium 152:
             // `BlockPromptsIfDismissedOften`/`…IgnoredOften` are gone. permissions.rs clears its data.)
             merge_list_switch(cl, "disable-features", &["Translate", "MediaRouter"]);
+            // macOS debug builds: Chromium encrypts cookies with a key it keeps in the login
+            // keychain, and an unsigned binary that is rebuilt on every `cargo build` can never
+            // hold on to that key's ACL — each run stops on a keychain password prompt, and the
+            // shutdown that reads the key again hangs behind it. Use Chromium's own mock key
+            // instead, as its tests do; a signed release build asks once, like any browser.
+            #[cfg(all(target_os = "macos", debug_assertions))]
+            cl.append_switch(Some(&CefString::from("use-mock-keychain")));
             // While AI agents may connect, a covered window keeps rendering (screenshots, clicks).
             if crate::automation::occlusion_flag_needed() {
                 cl.append_switch(Some(&CefString::from("disable-backgrounding-occluded-windows")));
@@ -163,6 +170,9 @@ wrap_browser_process_handler! {
 }
 
 fn on_context_initialized() {
+    // ⌘Q and the Dock's Quit take the window's own close path (platform/mac.rs).
+    #[cfg(target_os = "macos")]
+    platform::set_quit_handler(window::request_close);
     let dark = platform::system_dark_mode();
     let animations = platform::system_animations();
     controller::init(dark, animations);
@@ -190,6 +200,14 @@ pub fn settings(dirs: &AppDirs) -> Settings {
     let dark = platform::system_dark_mode();
     Settings {
         no_sandbox: 1,
+        // macOS: libcef lives in a framework inside the bundle, and every child process is started
+        // from a helper bundle next to it (platform/mac_bundle.rs). Empty (and ignored) elsewhere.
+        #[cfg(target_os = "macos")]
+        framework_dir_path: platform::mac_bundle::framework_dir().map(|p| s(&p)).unwrap_or_default(),
+        #[cfg(target_os = "macos")]
+        main_bundle_path: platform::mac_bundle::main_bundle().map(|p| s(&p)).unwrap_or_default(),
+        #[cfg(target_os = "macos")]
+        browser_subprocess_path: platform::mac_bundle::helper_exe().map(|p| s(&p)).unwrap_or_default(),
         root_cache_path: s(&dirs.user_data),
         cache_path: s(&dirs.user_data),
         persist_session_cookies: 1,

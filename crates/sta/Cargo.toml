@@ -57,5 +57,11 @@ windows-sys = { workspace = true, features = [
     "Win32_Graphics_Gdi",
 ] }
 
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2.workspace = true
+objc2-app-kit.workspace = true
+objc2-foundation.workspace = true
+dispatch2.workspace = true
+
 [target.'cfg(windows)'.build-dependencies]
 embed-resource.workspace = true

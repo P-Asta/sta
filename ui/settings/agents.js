@@ -9,7 +9,7 @@ import { useRequest } from '/common/ipc-hooks.js';
 import { Icon } from '/common/icons.js';
 import { Button, IconButton, TextField, Toggle } from '/common/components.js';
 import { Segmented } from '/common/internal-page.js';
-import { allTabs, classNames, formatDate } from '/common/util.js';
+import { allTabs, classNames, formatDate, IS_MAC } from '/common/util.js';
 import { AgentGlyph, clientName, exeName } from '/common/agent-ui.js';
 
 const report = (e) => console.error('[settings/agents]', e);
@@ -43,9 +43,13 @@ const ACCESS_DESCRIPTIONS = {
 
 const q = (s) => `"${s}"`;
 
-/** The copyable configuration for each client. `args` = extra bridge arguments (data dir). */
+/**
+ * The copyable configuration for each client. `args` = extra bridge arguments (data dir).
+ * `bridgePath` is the real path the shell reports; the fallback and the "where" lines below are
+ * only for the platform this runs on.
+ */
 export function setupSnippets(bridgePath, dataDir) {
-  const exe = bridgePath || 'C:\\Program Files\\sta\\sta-mcp.exe';
+  const exe = bridgePath || (IS_MAC ? '/Applications/sta.app/Contents/MacOS/sta-mcp' : 'C:\\Program Files\\sta\\sta-mcp.exe');
   const args = dataDir ? ['--data-dir', dataDir] : [];
   const cliArgs = args.length ? ` ${args[0]} ${q(args[1])}` : '';
   const withArgs = (obj) => (args.length ? { ...obj, args } : obj);
@@ -61,10 +65,13 @@ export function setupSnippets(bridgePath, dataDir) {
     {
       id: 'claudeDesktop',
       label: 'Claude Desktop',
-      where: 'Add to %APPDATA%\\Claude\\claude_desktop_config.json (Settings → Developer → Edit Config), then restart Claude Desktop.',
+      where: IS_MAC
+        ? 'Add to ~/Library/Application Support/Claude/claude_desktop_config.json (Settings → Developer → Edit Config), then restart Claude Desktop.'
+        : 'Add to %APPDATA%\\Claude\\claude_desktop_config.json (Settings → Developer → Edit Config), then restart Claude Desktop.',
       code: json({ mcpServers: { sta: withArgs({ command: exe }) } }),
-      after:
-        'Installed from the Microsoft Store? The file is in %LOCALAPPDATA%\\Packages\\Claude_pzs8sxrjxfjjc\\LocalCache\\Roaming\\Claude\\, and Claude can’t start sta for you: open sta first.',
+      after: IS_MAC
+        ? undefined
+        : 'Installed from the Microsoft Store? The file is in %LOCALAPPDATA%\\Packages\\Claude_pzs8sxrjxfjjc\\LocalCache\\Roaming\\Claude\\, and Claude can’t start sta for you: open sta first.',
     },
     {
       id: 'vscode',
@@ -75,7 +82,7 @@ export function setupSnippets(bridgePath, dataDir) {
     {
       id: 'cursor',
       label: 'Cursor',
-      where: 'Add to %USERPROFILE%\\.cursor\\mcp.json (or the project’s .cursor/mcp.json).',
+      where: IS_MAC ? 'Add to ~/.cursor/mcp.json (or the project’s .cursor/mcp.json).' : 'Add to %USERPROFILE%\\.cursor\\mcp.json (or the project’s .cursor/mcp.json).',
       code: json({ mcpServers: { sta: withArgs({ command: exe }) } }),
     },
   ];
@@ -97,8 +104,8 @@ function SetupCard({ info }) {
         <span class="ip-setting-label">Connect a client</span>
         <span class="ip-setting-desc">
           Register sta’s MCP server with your AI client. It runs on this computer and only talks to sta through a private channel for your
-          Windows account.
-          ${info && !info.bridgeFound && html` <span class="agt-warn">sta-mcp.exe wasn’t found next to sta.</span>`}
+          account.
+          ${info && !info.bridgeFound && html` <span class="agt-warn">${IS_MAC ? 'sta-mcp' : 'sta-mcp.exe'} wasn’t found next to sta.</span>`}
         </span>
       </div>
       <${Segmented} label="Client" value=${current.id} options=${snippets.map((s) => ({ value: s.id, label: s.label }))} onChange=${setClient} />

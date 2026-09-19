@@ -1,8 +1,9 @@
 //! The control channel between the MCP bridge (`sta-mcp.exe`) and the browser (docs/MCP.md
 //! "Channel").
 //!
-//! - Transport: a named pipe `\\.\pipe\sta-agent-<random128>` whose name the browser writes to
-//!   `<data>/sta/agent-endpoint.json` ([`Endpoint`]) while agent access is not Off.
+//! - Transport: a named pipe `\\.\pipe\sta-agent-<random128>` on Windows, a Unix domain socket
+//!   (`<data>/sta/agent.sock`, mode 0600) on macOS and Linux. Either way the browser writes what to
+//!   open to `<data>/sta/agent-endpoint.json` ([`Endpoint`]) while agent access is not Off.
 //! - Framing: UTF-8 NDJSON, one JSON object per line, at most [`MAX_LINE_BYTES`] per line.
 //!   The limit belongs to **one message, not to the session**: a sender checks its own line with
 //!   [`to_line_checked`] and turns an oversized one into a `too_large` error for that call
@@ -39,8 +40,10 @@ pub const PROTOCOL_VERSION: u32 = 1;
 pub const MAX_LINE_BYTES: usize = 8 * 1024 * 1024;
 /// File name of the endpoint file inside the profile directory (`<data>/sta/`).
 pub const ENDPOINT_FILE: &str = "agent-endpoint.json";
-/// Prefix of the pipe name.
+/// Prefix of the pipe name (Windows).
 pub const PIPE_PREFIX: &str = r"\\.\pipe\sta-agent-";
+/// File name of the agent socket inside the profile directory (Unix).
+pub const SOCKET_FILE: &str = "agent.sock";
 /// The browser closes a connection that sends no `hello` within this time.
 pub const HELLO_TIMEOUT_MS: u64 = 5_000;
 /// Default and maximum call deadlines.
@@ -53,7 +56,8 @@ pub const APPROVAL_HOLD_MS: u64 = 20_000;
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Endpoint {
-    /// Full pipe path (`\\.\pipe\sta-agent-…`).
+    /// What the bridge opens: the full pipe path (`\\.\pipe\sta-agent-…`) on Windows, the
+    /// absolute socket path on Unix.
     pub pipe: String,
     /// Browser process id.
     pub pid: u32,
@@ -63,11 +67,24 @@ pub struct Endpoint {
 }
 
 impl Endpoint {
-    /// A pipe name the browser could have created (the bridge never opens anything else).
+    /// A channel name the browser could have created (the bridge never opens anything else): the
+    /// random pipe name on Windows, an absolute `…/*.sock` path with no traversal on Unix (where
+    /// the socket lives in the user's own data directory and its mode, not its name, is what keeps
+    /// other users out).
     pub fn pipe_is_valid(&self) -> bool {
-        self.pipe
-            .strip_prefix(PIPE_PREFIX)
-            .is_some_and(|rest| rest.len() == 32 && rest.bytes().all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase()))
+        #[cfg(windows)]
+        {
+            self.pipe
+                .strip_prefix(PIPE_PREFIX)
+                .is_some_and(|rest| rest.len() == 32 && rest.bytes().all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase()))
+        }
+        #[cfg(not(windows))]
+        {
+            let path = std::path::Path::new(&self.pipe);
+            path.is_absolute()
+                && self.pipe.ends_with(".sock")
+                && path.components().all(|c| matches!(c, std::path::Component::Normal(_) | std::path::Component::RootDir))
+        }
     }
 }
 
@@ -381,11 +398,24 @@ mod tests {
     fn endpoint_golden_and_pipe_names() {
         let e = Endpoint { pipe: format!("{PIPE_PREFIX}{}", "0123456789abcdef0123456789abcdef"), pid: 99, protocol: 1, build: "0.1.0".into() };
         golden(e.clone(), r#"{"pipe":"\\\\.\\pipe\\sta-agent-0123456789abcdef0123456789abcdef","pid":99,"protocol":1,"build":"0.1.0"}"#);
-        assert!(e.pipe_is_valid());
-        for bad in [r"\\.\pipe\sta-agent-0123", r"\\.\pipe\other-0123456789abcdef0123456789abcdef", r"\\evil\pipe\sta-agent-0123456789abcdef0123456789abcdef"] {
-            assert!(!Endpoint { pipe: bad.into(), ..e.clone() }.pipe_is_valid(), "{bad}");
+        // The name rule is the one of the platform the bridge runs on: it decides what it opens.
+        #[cfg(windows)]
+        {
+            assert!(e.pipe_is_valid());
+            for bad in [r"\\.\pipe\sta-agent-0123", r"\\.\pipe\other-0123456789abcdef0123456789abcdef", r"\\evil\pipe\sta-agent-0123456789abcdef0123456789abcdef"] {
+                assert!(!Endpoint { pipe: bad.into(), ..e.clone() }.pipe_is_valid(), "{bad}");
+            }
+            assert!(!Endpoint { pipe: format!("{PIPE_PREFIX}{}", "0123456789ABCDEF0123456789abcdef"), ..e }.pipe_is_valid());
         }
-        assert!(!Endpoint { pipe: format!("{PIPE_PREFIX}{}", "0123456789ABCDEF0123456789abcdef"), ..e }.pipe_is_valid());
+        #[cfg(not(windows))]
+        {
+            assert!(!e.pipe_is_valid(), "a Windows pipe name is not a socket path");
+            let ok = Endpoint { pipe: format!("/Users/me/Library/Application Support/sta/sta/{SOCKET_FILE}"), ..e.clone() };
+            assert!(ok.pipe_is_valid());
+            for bad in ["relative/agent.sock", "/tmp/../etc/agent.sock", "/tmp/agent.socket", "/tmp/agent"] {
+                assert!(!Endpoint { pipe: bad.into(), ..e.clone() }.pipe_is_valid(), "{bad}");
+            }
+        }
     }
 
     #[test]

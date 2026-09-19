@@ -22,6 +22,8 @@
 //     …])`) as well as in one string.
 //
 // `// console-ok: <reason>` on the call's own line or the line before it is the only allowlist.
+// Rust files that only ever build on macOS or Linux (`platform/mac*.rs`, `*/unix.rs`) use it too:
+// the rules above are about Windows consoles, which those platforms do not have.
 //
 //   node tools/check-no-console.mjs        exit 0 = clean, 1 = violations
 

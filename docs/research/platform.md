@@ -906,6 +906,85 @@ impl AppDirs {
 
 ---
 
+## 10. macOS (verified against the 152.3.0 bindings and by running the build)
+
+The same `main.rs` runs on macOS, with three things done before the first CEF call. Everything here
+was checked against `cef-152.3.0+152.0.6/src/bindings/aarch64_apple_darwin.rs`,
+`cef-dll-sys`'s `build.rs`, and a running debug build.
+
+**10.1 libcef is not linked.** On Windows and Linux `cef-dll-sys` copies the runtime next to the
+binary and links `libcef`; on macOS it only builds and links the static C++ wrapper
+(`cargo::rustc-link-lib=static=cef_dll_wrapper`, plus `framework=AppKit`) and leaves the framework
+alone — "On macOS it's more complicated so we'll leave it to tools like tauri-cli for now". The
+framework is therefore `dlopen`ed at runtime through `cef_load_library(<path to the framework
+binary>)`, in **every** process, before `api_hash`. `cef::load_library` is the safe wrapper; the
+crate's own `library_loader::LibraryLoader` resolves the path relative to `current_exe` (`..`/
+`Frameworks` for the app, `../../..` for a helper) and panics if it is missing, which is why
+`mac_bundle::load_framework` does the same resolution itself and returns an error instead.
+
+**10.2 The app must be a bundle.** The framework lives in `Contents/Frameworks`, and every child
+process is started from a helper *bundle* (`LSUIElement` keeps it out of the Dock; the bundle is
+also what gives the process its own identity for TCC prompts). CEF derives the helper path from the
+main bundle, but `Settings.browser_subprocess_path` is set explicitly, along with
+`framework_dir_path` and `main_bundle_path` (`Settings` L516–518 in the macOS bindings; the three
+fields do not exist on Windows). One helper bundle would do — CEF uses
+`browser_subprocess_path` for every process type — but all five Chromium names are created, so a
+later hardened-runtime build can give the Renderer and GPU helpers their own entitlements.
+
+`mac_bundle.rs` writes the `Info.plist` files by hand (eleven static keys) and, for a development
+bundle, hard-links the binary into the helpers and symlinks the CEF distribution. Hard links, not
+symlinks: `std::env::current_exe` on macOS returns `_NSGetExecutablePath` **without** resolving
+symlinks, so a symlinked helper would report a path outside the bundle and the framework lookup
+would fail. (A hard link has the other side effect that `proc_pidpath` — and therefore `ps`,
+`sample` and Activity Monitor — may report the browser process under one of the helper names, since
+the kernel maps the inode back to whichever name it cached. Nothing in the app reads that.)
+A standalone bundle copies both, because a signature belongs to a file and five names for one file
+cannot carry five identities.
+
+**10.3 `NSApp` must implement `CefAppProtocol`.** `cef_initialize` checks it. The `cef` crate
+declares the three protocols in `application_mac.rs` (`CrAppProtocol`, `CrAppControlProtocol`,
+`CefAppProtocol`); `platform/mac.rs` defines `StaApplication` with `objc2::define_class!` and gets
+`NSApp` by sending `sharedApplication` **to that class** — whoever asks first decides what `NSApp`
+is. The `handlingSendEvent` flag lives in a main-thread `Cell`, not in an instance variable: AppKit
+allocates the singleton itself, so there is no point at which Rust could initialize ivars.
+
+**10.4 Types that differ in the bindings.** These are what a Windows-only shell trips over:
+
+| Name | Windows | macOS |
+|---|---|---|
+| `cef_window_handle_t` | `HWND` (newtype around a pointer) | `*mut c_void` — the hosting `NSView` |
+| `cef_event_handle_t` | `*mut MSG` | `*mut c_void` (the `KeyboardHandler` methods take `*mut u8`) |
+| `cef_cursor_handle_t` | `HCURSOR` | `*mut c_void` |
+| generated enums (`cef_urlrequest_flags_t`, `SchemeOptions`, `Resultcode`, …) | `c_int` newtypes | `c_uint` newtypes |
+
+`platform::handle_value` and `platform::OsEvent` hide the first two; the enum raws are cast at the
+four call sites that mix them with `c_int` APIs.
+
+**10.5 Accelerators have no ⌘.** `cef_window_t::set_accelerator(command_id, key_code,
+shift_pressed, ctrl_pressed, alt_pressed, high_priority)` — there is no Command flag, and Views
+matches `EF_CONTROL_DOWN`, the physical Control key. A ⌘-based table therefore cannot be registered
+at all; `keyboard.rs` matches it against the key events the handlers already see
+(`EVENTFLAG_COMMAND_DOWN = 1 << 7`) and dispatches through the same `on_accelerator`. The ⌘ key-up
+that commits the Ctrl+Tab switcher arrives as `VKEY_LWIN`/`VKEY_RWIN` (0x5B/0x5C).
+
+**10.6 The keychain.** Chromium encrypts cookies with a key it keeps in the login keychain
+("Chromium Safe Storage"). An unsigned binary that changes on every `cargo build` can never keep
+that key's ACL, so every run raises a keychain password prompt — and the prompt is *modal to a
+thread pool worker*, which makes `cef_shutdown` hang behind it at exit. Debug builds pass
+`--use-mock-keychain` (Chromium's own switch, what its tests use). A signed release build asks once.
+
+**10.7 Data directory.** `~/Library/Application Support/sta` (`sta Dev` for debug builds), the same
+tree as on Windows (`User Data/`, `Logs/`, `sta/`). The folders from before the rename never existed
+here, so `paths::resolve` offers no legacy folder to migrate.
+
+**10.8 What Views gives and does not.** The frameless window keeps the traffic lights in a strip
+above the HTML top bar. `NSWindow.appearance` is set from sta's theme so the parts AppKit draws
+(scrollbars, menus, native dialogs) match. The Win32-only pieces — the hooks that adopt or hide the
+windows Chromium opens for itself (`hidden_windows.rs`), and the real-input test helpers — have
+inert stand-ins.
+
+---
+
 ## Sources
 - Local:
   - the cef crate files listed at the top (bindings line numbers as cited)

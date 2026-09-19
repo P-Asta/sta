@@ -1,5 +1,12 @@
 //! Keyboard shortcuts [owner: chrome] (ARCHITECTURE §4.2, arc_spec §3).
 //!
+//! The table is written with Ctrl, and Ctrl is what Windows sends. **On macOS the same table is
+//! read as ⌘** ([`PRIMARY_MODIFIER`]): `Window::set_accelerator` only understands shift/ctrl/alt —
+//! it has no flag for the Command key — so there the bindings are not registered as accelerators at
+//! all. They are matched against the key events the handlers below already see and routed through
+//! the same [`on_accelerator`], which keeps one dispatch path (and its DevTools special cases) for
+//! both platforms. `Ctrl` on macOS is left to the OS and to the page, where it means something else.
+//!
 //! Responsibility:
 //! - the accelerator table (one `Window::set_accelerator` command id per key combo — registering
 //!   an id twice replaces the first combo); `on_accelerator` maps id → `Command` and enqueues it;
@@ -67,6 +74,9 @@ pub mod vk {
     pub const RIGHT: i32 = 0x27;
     pub const DOWN: i32 = 0x28;
     pub const KEY_0: i32 = 0x30;
+    /// `VKEY_LWIN` / `VKEY_RWIN`: what Chromium reports for the left and right ⌘ keys on macOS.
+    pub const LWIN: i32 = 0x5B;
+    pub const RWIN: i32 = 0x5C;
     pub const NUMPAD0: i32 = 0x60;
     pub const ADD: i32 = 0x6B;
     pub const SUBTRACT: i32 = 0x6D;
@@ -86,6 +96,10 @@ pub mod vk {
         c as i32
     }
 }
+
+/// The modifier sta's shortcuts are built on: Ctrl on Windows, ⌘ on macOS. A `Binding`'s `ctrl`
+/// flag means "this modifier", whichever it is.
+pub const PRIMARY_MODIFIER: u32 = if cfg!(target_os = "macos") { EVENTFLAG_COMMAND_DOWN } else { EVENTFLAG_CONTROL_DOWN };
 
 pub struct Binding {
     pub key: i32,
@@ -165,7 +179,9 @@ fn build_bindings() -> Vec<Binding> {
         b(letter('U'), "C", false, Command::ViewSource),
         b(letter('J'), "C", false, Command::ToggleSidebarPanel { panel: SidebarPanel::Downloads }),
         b(OEM_COMMA, "C", false, Command::OpenInternalPage { page: InternalPage::Settings }),
-        b(letter('H'), "C", false, Command::OpenInternalPage { page: InternalPage::History }),
+        // History is ⌘Y on macOS, as in Safari and Chrome: ⌘H is Hide, which belongs to the OS (and
+        // to the app menu, platform/mac.rs).
+        b(if cfg!(target_os = "macos") { letter('Y') } else { letter('H') }, "C", false, Command::OpenInternalPage { page: InternalPage::History }),
         b(letter('O'), "C", false, Command::ExpandPeek { split: false }),
         b(letter('F'), "A", false, Command::ToggleSidebarPanel { panel: SidebarPanel::AppMenu }),
         // Ctrl+E is page first (D5a): Notion, vscode.dev and DevTools keep their own Ctrl+E, and the
@@ -200,7 +216,13 @@ pub fn find_binding(key: i32, shift: bool, ctrl: bool, alt: bool) -> Option<i32>
 }
 
 /// Registers every binding on the window (only effective from `on_window_created` on).
+///
+/// Not on macOS: an accelerator there could only be registered with Ctrl, which is not what the
+/// shortcut is (see the module docs). The handlers dispatch the same table themselves.
 pub fn install_accelerators(window: &Window) {
+    if cfg!(target_os = "macos") {
+        return;
+    }
     for (i, binding) in bindings().iter().enumerate() {
         window.set_accelerator(
             FIRST_COMMAND_ID + i as i32,
@@ -289,9 +311,45 @@ pub fn on_accelerator(command_id: i32) -> bool {
 const EVENTFLAG_SHIFT_DOWN: u32 = 1 << 1;
 const EVENTFLAG_CONTROL_DOWN: u32 = 1 << 2;
 const EVENTFLAG_ALT_DOWN: u32 = 1 << 3;
+const EVENTFLAG_COMMAND_DOWN: u32 = 1 << 7;
 
+/// The modifiers a binding is matched on, with [`PRIMARY_MODIFIER`] reported as
+/// `EVENTFLAG_CONTROL_DOWN`: the table speaks Ctrl, the user presses ⌘ on macOS. A real Ctrl there
+/// is not one of sta's modifiers and is dropped (Ctrl+key belongs to macOS text editing).
 fn modifiers(event: &KeyEvent) -> u32 {
-    event.modifiers & (EVENTFLAG_SHIFT_DOWN | EVENTFLAG_CONTROL_DOWN | EVENTFLAG_ALT_DOWN)
+    let mut m = event.modifiers & (EVENTFLAG_SHIFT_DOWN | EVENTFLAG_CONTROL_DOWN | EVENTFLAG_ALT_DOWN);
+    if PRIMARY_MODIFIER != EVENTFLAG_CONTROL_DOWN {
+        m &= !EVENTFLAG_CONTROL_DOWN;
+        if event.modifiers & PRIMARY_MODIFIER != 0 {
+            m |= EVENTFLAG_CONTROL_DOWN;
+        }
+    }
+    m
+}
+
+/// macOS: dispatches the binding a key event matches, through the same path an accelerator takes.
+/// `reserved_only` is the pre-key pass, where only high-priority bindings (the ones the page must
+/// never see) may fire. `true` = the key is consumed.
+#[cfg(target_os = "macos")]
+fn dispatch_shortcut(event: &KeyEvent, reserved_only: bool) -> bool {
+    if event.type_ != KeyEventType::RAWKEYDOWN {
+        return false;
+    }
+    let Some(index) = match_binding(event) else { return false };
+    if reserved_only && !bindings()[index].high_priority {
+        return false;
+    }
+    on_accelerator(FIRST_COMMAND_ID + index as i32)
+}
+
+/// The key that holds [`PRIMARY_MODIFIER`] down: Ctrl on Windows, either ⌘ key on macOS.
+/// Releasing it is what commits the Ctrl+Tab (⌘Tab) switcher.
+fn is_primary_modifier_key(windows_key_code: i32) -> bool {
+    if cfg!(target_os = "macos") {
+        windows_key_code == vk::LWIN || windows_key_code == vk::RWIN
+    } else {
+        windows_key_code == vk::CONTROL
+    }
 }
 
 /// Ctrl released after Ctrl+Tab: commit the switcher selection (once). `from_browser`: the
@@ -307,7 +365,7 @@ fn on_ctrl_released(from_browser: bool) -> bool {
 
 /// `KeyboardHandler::on_pre_key_event` for every browser. Returns `true` to consume the event.
 pub fn on_pre_key_event(browser_id: i32, event: &KeyEvent) -> bool {
-    if event.type_ == KeyEventType::KEYUP && event.windows_key_code == vk::CONTROL {
+    if event.type_ == KeyEventType::KEYUP && is_primary_modifier_key(event.windows_key_code) {
         on_ctrl_released(true);
         return false;
     }
@@ -339,6 +397,12 @@ pub fn on_pre_key_event(browser_id: i32, event: &KeyEvent) -> bool {
             bindings()[index].command
         );
     }
+    // macOS has no accelerator table to fall through to (module docs): the reserved bindings are
+    // dispatched here, before the page sees the key.
+    #[cfg(target_os = "macos")]
+    if dispatch_shortcut(event, true) {
+        return true;
+    }
     false
 }
 
@@ -350,6 +414,12 @@ pub fn on_pre_key_event(browser_id: i32, event: &KeyEvent) -> bool {
 /// callback.
 pub fn on_key_event(browser_id: i32, event: &KeyEvent, native: bool) -> bool {
     if native || event.type_ == KeyEventType::CHAR {
+        // macOS: this is where a page-first binding is dispatched — the page had the key first and
+        // left it alone. (Windows lets Views match its accelerator table instead.)
+        #[cfg(target_os = "macos")]
+        if native {
+            return dispatch_shortcut(event, false);
+        }
         return false;
     }
     if match_binding(event).is_some() {
@@ -448,8 +518,14 @@ fn esc_closes_panel(panel: Option<&SidebarPanel>) -> bool {
 
 /// `WindowDelegate::on_key_event`: keys that no view handled.
 pub fn on_window_key_event(event: &KeyEvent) -> bool {
-    if event.type_ == KeyEventType::KEYUP && event.windows_key_code == vk::CONTROL {
+    if event.type_ == KeyEventType::KEYUP && is_primary_modifier_key(event.windows_key_code) {
         on_ctrl_released(false);
+    }
+    // macOS: a key no view handled (nothing focused, or a view that ignored it) still has to reach
+    // sta's shortcuts, because there is no accelerator table behind this callback.
+    #[cfg(target_os = "macos")]
+    if dispatch_shortcut(event, false) {
+        return true;
     }
     false
 }

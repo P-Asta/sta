@@ -8,7 +8,7 @@ import { AppMark, Icon } from '/common/icons.js';
 import { Button, IconButton, Select, TextField, Toggle } from '/common/components.js';
 import { Segmented, mountPage, useNavIndicator } from '/common/internal-page.js';
 import * as motion from '/common/motion.js';
-import { classNames } from '/common/util.js';
+import { classNames, IS_MAC } from '/common/util.js';
 import { AgentsSection } from './agents.js';
 import { AnimationsSection } from './animations.js';
 import { ExtensionsSection } from './extensions.js';
@@ -429,7 +429,9 @@ function Settings({ state }) {
         <div class="ip-setting is-stacked">
           <div class="ip-setting-text">
             <span class="ip-setting-label">Theme</span>
-            <span class="ip-setting-desc">System follows the Windows light or dark mode setting. Applies to every space.</span>
+            <span class="ip-setting-desc"
+              >System follows the ${IS_MAC ? 'macOS' : 'Windows'} light or dark mode setting. Applies to every space.</span
+            >
           </div>
           <${AppearancePicker} value=${settings.appearance} />
         </div>

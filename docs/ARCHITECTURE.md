@@ -2,12 +2,12 @@
 
 sta is an Arc-style desktop browser built with **CEF 152 (Chromium 152)** through the
 [`cef`](https://crates.io/crates/cef) crate `=152.3.0`, written in Rust. The primary target is
-Windows 11 x64. The browser chrome (sidebar, top bar, command bar, internal pages) is HTML/CSS/JS
-served from a custom `sta://` scheme. All state lives in Rust.
+Windows 11 x64; **macOS 11+** is the second (§3.2). The browser chrome (sidebar, top bar, command bar,
+internal pages) is HTML/CSS/JS served from a custom `sta://` scheme. All state lives in Rust.
 
 Verified research notes, with exact API signatures and CEF behaviour, are in `docs/research/`:
 `views.md` (window, layout, overlays), `ipc.md` (scheme and IPC), `handlers.md` (browser handlers),
-`platform.md` (bootstrap, settings, Windows), `extensions.md` (what Chrome extensions can and
+`platform.md` (bootstrap, settings, Windows, macOS §10), `extensions.md` (what Chrome extensions can and
 can't do in Alloy tabs, and the windows Chromium opens for them, §4.5), `devtools.md` (how DevTools
 are docked inside the window, and the five approaches that were tried, §4.1), `automation.md`
 (DevTools measurements) and `arc_spec.md` (product/UX spec). **Read the relevant one before touching CEF
@@ -27,7 +27,8 @@ crates/sta-core/           pure Rust: model, Command→Effect reducer (Store), o
                            before the rename (legacy.rs), AI agent policy/tools (agent/). NO CEF.
                            Unit-tested.
 crates/sta/                the browser executable (CEF shell): window and tabs, overlays, keyboard,
-                           IPC, the sta:// scheme, Windows integration, agent automation,
+                           IPC, the sta:// scheme, OS integration (platform/: win.rs, mac.rs and
+                           the macOS app bundle mac_bundle.rs), agent automation,
                            extensions (§4.5-4.6), docked DevTools (§4.1), and the debug-only test
                            surface (`test_hooks/`, §8.4). `motion.rs` is the only timing the shell
                            owns (acknowledged exits, the SetChrome midpoint, §4.7)
@@ -55,6 +56,12 @@ on `PATH` (`pip install --user cmake ninja`), then `cargo build`. The first buil
 (~600 MB extracted) into `.cef/`. `cef-dll-sys` copies `libcef.dll`, the `.pak` files and
 `locales/` next to the exe in `target/<profile>/`. Build from a short path: the CEF wrapper's CMake
 build fails with `C1083` under very long directories.
+
+Build prerequisites (macOS): Rust stable, the Xcode command line tools, CMake and Ninja on `PATH`
+(`brew install cmake ninja` — the CEF C++ wrapper is compiled from source), then `cargo build`.
+Nothing is copied next to the exe there: libcef is a framework the binary loads at runtime from
+inside an app bundle, so a debug build assembles `target/<profile>/sta.app` around itself and
+re-executes into it (§9, `crates/sta/src/platform/mac_bundle.rs`).
 
 > **Editing files on Windows:** don't round-trip UTF-8 source files through Windows PowerShell 5.1
 > `Get-Content`/`Set-Content`. It reads them as the ANSI code page and corrupts non-ASCII text. Use
@@ -186,14 +193,16 @@ Following `platform.md` §1:
   - `STA_DEVTOOLS_INTERNAL=1`: allows DevTools on `sta://` pages, which are refused otherwise
     (§4.1 "DevTools"). Debug builds only, and only for working on the UI itself.
 - Data dir:
-  - `%LOCALAPPDATA%\sta` (release);
-  - `%LOCALAPPDATA%\sta Dev` (debug);
+  - `%LOCALAPPDATA%\sta` (release) / `~/Library/Application Support/sta` on macOS;
+  - `%LOCALAPPDATA%\sta Dev` (debug) / `~/Library/Application Support/sta Dev`;
   - override with `--sta-data-dir=<abs path>` or `STA_DATA_DIR`, which tests use so they
     never touch the user's profile or collide with the process singleton;
   - resolved from the `LOCALAPPDATA` environment variable (not the Known Folder API), so
-    `migration-e2e.mjs` points it at a temporary folder;
+    `migration-e2e.mjs` points it at a temporary folder; `HOME` plays that role on macOS;
   - migration from before the rename (`paths::resolve`, decisions in `sta_core::legacy`, all
-    before the log file, the panic hook or CEF touch the directories):
+    before the log file, the panic hook or CEF touch the directories) — **Windows only**: sta has
+    never shipped anywhere else under the old name, so elsewhere `paths` offers no legacy folder and
+    the steps below are a no-op:
     1. without an override, the legacy default folder (`legacy::DATA_DIR_RELEASE` /
        `DATA_DIR_DEBUG`) is renamed to the new default name (`MoveFileExW` without flags: same
        volume, never replaces) when the new folder doesn't exist yet. Both existing → the new one
@@ -280,6 +289,42 @@ If browsers are still alive 8 s after `Quit`, state is saved and the process exi
 `cef::shutdown()` (which must never run with live browsers). If core returns no `Quit` for a close
 request (e.g. it already set shutting-down after a panic), the controller runs `[SaveNow, Quit]`
 itself, so the window can always be closed.
+
+---
+
+### 3.2 macOS bootstrap (platform/mac.rs, platform/mac_bundle.rs)
+
+Three things are different before `api_hash` on macOS, and `main` does them in this order:
+
+1. **The app bundle.** libcef is not linked into the binary there: it is a framework loaded at
+   runtime from `Contents/Frameworks`, and every child process is started from a helper *bundle* so
+   the OS gives it the right process type and keeps it out of the Dock. `mac_bundle::ensure_bundled`
+   therefore refuses to run outside one. A **debug** build instead assembles
+   `target/<profile>/sta.app` around itself — Info.plist, five helper apps whose executables are
+   hard links to the binary, and a symlink to the CEF distribution `build.rs` found — and
+   `exec`s the copy inside it, keeping the terminal and its output. `--sta-bundle-mac[=<dir>]`
+   builds a standalone bundle (framework copied, helpers copied so each can be signed) and exits;
+   that is what `tools/package-release.mjs` ships.
+2. **The framework.** `mac_bundle::load_framework` `dlopen`s
+   `Contents/Frameworks/Chromium Embedded Framework.framework` in *every* process, before the first
+   CEF call.
+3. **`NSApp`.** `cef_initialize` checks that the application object implements `CefAppProtocol`, so
+   `platform::init_application` creates `NSApp` from sta's own `NSApplication` subclass
+   (`StaApplication`, which tracks `handlingSendEvent` like Chromium's `CrApplication`), sets the
+   activation policy and installs the menu bar. Only the browser process needs it. The delegate's
+   `applicationShouldTerminate:` routes ⌘Q and the Dock's Quit into the window's own close path, so
+   the session is saved before CEF shuts down.
+
+`Settings` then carries three more paths: `framework_dir_path`, `main_bundle_path` and
+`browser_subprocess_path` (the generic `sta Helper`). Debug builds also pass
+`--use-mock-keychain`: Chromium keeps the cookie encryption key in the login keychain, and an
+unsigned binary that changes on every `cargo build` can never hold on to that key's ACL — without it
+every run stops on a keychain password prompt, and the shutdown that reads the key again hangs
+behind it.
+
+Shortcuts are the other visible difference: `Window::set_accelerator` has no flag for ⌘, so on macOS
+the table in `keyboard.rs` is not registered as accelerators at all — it is matched against the key
+events the handlers already see and routed through the same `on_accelerator` (§4.2).
 
 ---
 
@@ -775,6 +820,15 @@ views), CUSTOM docking, hidden:
 `Window::set_accelerator` in `on_window_created`, with one command id per key combo.
 `on_accelerator` maps id → `Command` and **enqueues** it. Accelerators work whether a tab, the
 sidebar or an overlay has focus. Ids and bindings (Arc for Windows, `arc_spec.md` §3):
+
+> **macOS reads the same table with ⌘** (`PRIMARY_MODIFIER`). `set_accelerator` takes only
+> shift/ctrl/alt — there is no flag for the Command key — so nothing is registered as an accelerator
+> there. Instead the handlers below match the table themselves (`modifiers()` reports ⌘ as the
+> table's `ctrl`, and a real Ctrl is dropped: it belongs to macOS text editing) and call the same
+> `on_accelerator`, so both platforms take one dispatch path with one set of special cases. A
+> reserved binding fires in `on_pre_key_event`, before the page; a page-first one in `on_key_event`,
+> after the page left the key alone; `on_window_key_event` catches what no view handled. **⌘H is
+> Hide** on macOS, so history moves to ⌘Y — the one binding that is not the same table.
 
 - **high_priority = 1** (reserved; pages can't intercept):
   - Ctrl+T `OpenCommandBar{newTab}`
@@ -1621,8 +1675,9 @@ User and security documentation: `docs/MCP.md` (Korean guide `docs/MCP.ko.md`). 
 `docs/research/automation.md`.
 
 ```
-MCP client ─stdio─► sta-mcp.exe ─NDJSON, \\.\pipe\sta-agent-<random128>─► automation/pipe.rs (threads)
-                                                                                      └► session.rs → tools*.rs → page.rs → cdp.rs (UI thread)
+MCP client ─stdio─► sta-mcp ─NDJSON over the channel─► automation/pipe.rs (threads)
+                   \\.\pipe\sta-agent-<random128>            └► session.rs → tools*.rs → page.rs → cdp.rs (UI thread)
+                   or <data>/sta/agent.sock (macOS)
 ```
 
 - **Core** (`sta-core/src/agent/`, `store/agent.rs`): channel message types (golden JSON
@@ -1632,7 +1687,9 @@ MCP client ─stdio─► sta-mcp.exe ─NDJSON, \\.\pipe\sta-agent-<random128>�
   defaults, unknown enum values load as off). The store keeps sessions, approval prompts, agent
   tabs (opened/shared), the last 5 actions and held downloads (`UiState.agent`, `TabView.agent`);
   `Effect::AgentEndpoint{enabled}` follows `settings.agentAccess`.
-- **Pipe** (`pipe.rs`, `win.rs`): `CreateNamedPipeW` with `FILE_FLAG_FIRST_PIPE_INSTANCE`,
+- **Channel** (`pipe.rs` + `win.rs` on Windows, `socket.rs` + `unix.rs` elsewhere — one module
+  name, `automation::pipe`, and one API: `endpoint_name`, `start`, `send`, `close`, `PipeEvent`,
+  `ClientIdentity`). Windows: `CreateNamedPipeW` with `FILE_FLAG_FIRST_PIPE_INSTANCE`,
   `PIPE_REJECT_REMOTE_CLIENTS` and SDDL `D:P(A;;0x12019f;;;<user SID>)S:(ML;;NWNR;;;ME)` (read and
   write for the user, including `FILE_CREATE_PIPE_INSTANCE`, which the server's second and later
   instances need; at most 4 instances); overlapped
@@ -1640,6 +1697,11 @@ MCP client ─stdio─► sta-mcp.exe ─NDJSON, \\.\pipe\sta-agent-<random128>�
   sessions are dropped; the bridge's parent process image and Authenticode signer are determined
   on the reader thread. Threads only post `(connection, PipeEvent)` to the UI thread. The pipe name
   goes to `<data>/sta/agent-endpoint.json` (removed when access turns off and at shutdown).
+  Unix: a socket at `<data>/sta/agent.sock`, mode 0600 in the user's own data directory (a stale one
+  is replaced only after a connection attempt proves nothing listens on it), blocking I/O on the
+  same three kinds of thread, and `getsockopt(SOL_LOCAL, LOCAL_PEERCRED/LOCAL_PEERPID)` for the
+  client's uid (another user's is dropped) and pid. No signer is read there, so *Always allow* —
+  which is keyed on it — is never offered.
 - **Sessions** (`session.rs`): `hello` within 5 s → access/paused checks → approval
   (`AgentConnectionRequested` → core prompt or trusted client → `Effect::AgentAnswer`; at most one
   pending, 60 s back-off after Deny) → `welcome` → calls. At most 2 connections; per-session token

@@ -39,7 +39,6 @@ mod error_page;
 use crate::browsers::{self, Role, Surface};
 use crate::{controller, downloads, external, ipc, keyboard, overlays, permissions, renderer, scheme, tabs, task, window};
 use sta_core::{Command, Id, LinkDisposition, OpenTarget};
-use cef::sys::MSG;
 use cef::wrapper::message_router::MessageRouterBrowserSideHandlerCallbacks;
 use cef::*;
 use std::cell::RefCell;
@@ -224,7 +223,7 @@ wrap_keyboard_handler! {
             &self,
             _browser: Option<&mut Browser>,
             event: Option<&KeyEvent>,
-            _os_event: Option<&mut MSG>,
+            _os_event: crate::platform::OsEvent<'_>,
             _is_keyboard_shortcut: Option<&mut i32>,
         ) -> i32 {
             let Some(event) = event else { return 0 };
@@ -782,21 +781,21 @@ wrap_keyboard_handler! {
     impl KeyboardHandler {
         /// A key the page left unhandled, on its way to the normal-priority accelerators. Keys
         /// injected through the DevTools protocol (no OS message) stop here: see keyboard.rs.
-        fn on_key_event(&self, browser: Option<&mut Browser>, event: Option<&KeyEvent>, os_event: Option<&mut MSG>) -> i32 {
+        fn on_key_event(&self, browser: Option<&mut Browser>, event: Option<&KeyEvent>, os_event: crate::platform::OsEvent<'_>) -> i32 {
             let (Some(browser), Some(event)) = (browser, event) else { return 0 };
-            keyboard::on_key_event(browser.identifier(), event, os_event.is_some()) as i32
+            keyboard::on_key_event(browser.identifier(), event, crate::platform::os_event_present(&os_event)) as i32
         }
 
         fn on_pre_key_event(
             &self,
             browser: Option<&mut Browser>,
             event: Option<&KeyEvent>,
-            os_event: Option<&mut MSG>,
+            os_event: crate::platform::OsEvent<'_>,
             _is_keyboard_shortcut: Option<&mut i32>,
         ) -> i32 {
             let (Some(browser), Some(event)) = (browser, event) else { return 0 };
             // Real keyboard input (with a native message) in a tab hands control back to the user.
-            crate::automation::on_pre_key_event(browser.identifier(), os_event.is_some());
+            crate::automation::on_pre_key_event(browser.identifier(), crate::platform::os_event_present(&os_event));
             keyboard::on_pre_key_event(browser.identifier(), event) as i32
         }
     }

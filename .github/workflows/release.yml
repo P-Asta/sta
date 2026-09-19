@@ -46,13 +46,12 @@ jobs:
           - os: windows-latest
             label: windows-x64
             archive: zip
-          # macOS and Linux have no shell yet — `crates/sta/src/platform/` is Win32 throughout
-          # (docs/STATUS.md "Windows only"). When the macOS shell lands, add:
-          #   - os: macos-14
-          #     label: darwin-aarch64
-          #     archive: zip
-          # and give `tools/package-release.mjs` PAYLOAD.darwin its file list. Nothing else here
-          # is Windows-specific: the packaging, hashing, manifest and release steps are shared.
+          - os: macos-14
+            label: darwin-arm64
+            archive: zip
+          # Linux has no shell yet (docs/STATUS.md). Nothing else here is platform-specific: the
+          # packaging, hashing, manifest and release steps are shared, and `stage` knows what each
+          # platform's archive holds (tools/package-release.mjs).
 
     steps:
       - uses: actions/checkout@v4
@@ -93,16 +92,29 @@ jobs:
       - name: Make the build script re-download CEF if it is gone
         shell: bash
         run: |
-          if ls "$CEF_DIR"/*/*/libcef.lib >/dev/null 2>&1 || ls "$CEF_DIR"/*/libcef.lib >/dev/null 2>&1; then
-            echo "CEF import library is present, leaving the cached build alone"
+          # What "the download is still here" looks like differs per platform: an import library
+          # on Windows, the framework on macOS. Checking for the Windows one everywhere would
+          # throw the macOS job's cache away on every run.
+          case "$RUNNER_OS" in
+            Windows) MARKER=libcef.lib ;;
+            macOS) MARKER='Chromium Embedded Framework.framework' ;;
+            *) MARKER=libcef.so ;;
+          esac
+          if ls -d "$CEF_DIR"/*/*/"$MARKER" >/dev/null 2>&1 || ls -d "$CEF_DIR"/*/"$MARKER" >/dev/null 2>&1; then
+            echo "$MARKER is present, leaving the cached build alone"
             exit 0
           fi
-          echo "no libcef.lib under $CEF_DIR — dropping cef-dll-sys so its build script runs again"
+          echo "no $MARKER under $CEF_DIR — dropping cef-dll-sys so its build script runs again"
           rm -rf target/release/.fingerprint/cef-dll-sys-* target/release/build/cef-dll-sys-*
 
       - uses: actions/setup-node@v4
         with:
           node-version: 'lts/*'
+
+      # The CEF C++ wrapper is built from source by `cef-dll-sys`, with Ninja.
+      - name: CMake and Ninja (macOS)
+        if: runner.os == 'macOS'
+        run: brew install ninja
 
       # The tag names the release, so it also names the build: this stamps `[workspace.package]
       # version` with the tag's version before anything compiles. Every crate inherits that line,
@@ -135,7 +147,11 @@ jobs:
         shell: bash
         run: |
           cd dist
-          if command -v 7z >/dev/null 2>&1; then
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            # `ditto` is the one archiver that keeps an app bundle intact (modes included, which
+            # is what makes the unpacked binaries runnable — crates/sta/src/unzip.rs).
+            ditto -c -k --keepParent "${{ steps.stage.outputs.name }}" "${{ steps.stage.outputs.archive }}"
+          elif command -v 7z >/dev/null 2>&1; then
             7z a -tzip -mx=7 "${{ steps.stage.outputs.archive }}" "${{ steps.stage.outputs.name }}" >/dev/null
           else
             zip -qr "${{ steps.stage.outputs.archive }}" "${{ steps.stage.outputs.name }}"
@@ -227,8 +243,10 @@ jobs:
 
             ---
 
-            **Install**: download the archive for your platform, unpack it anywhere and run `sta.exe`.
-            There is no installer yet, and the build is not code-signed — SmartScreen will ask once.
+            **Install**: download the archive for your platform and unpack it anywhere — then run
+            `sta.exe` (Windows) or open `sta.app` (macOS). There is no installer yet, and the build
+            is not code-signed: SmartScreen asks once on Windows, and on macOS open it from the
+            right-click menu the first time (Gatekeeper refuses a double-click on an unsigned app).
 
             **Updating**: sta checks this release a few seconds after it starts and offers the new
             version (Settings › About). Publishing this draft is what makes that happen — while it

@@ -14,7 +14,7 @@
 // Also used as a module by tools/ui-shot.mjs: `startStaticServer({root, host, port, onResponse})`.
 
 import http from 'node:http';
-import { createReadStream } from 'node:fs';
+import { createReadStream, existsSync } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -45,6 +45,21 @@ export const MIME_TYPES = Object.freeze({
 });
 
 export const mimeTypeOf = (file) => MIME_TYPES[path.extname(file).toLowerCase()] ?? 'application/octet-stream';
+
+/**
+ * The headless Chromium the UI tools drive (`ui-shot.mjs`, `motion-check.mjs`): Edge where the
+ * browser is developed, whatever is installed on a Mac. Both take `--edge <path>` to override it;
+ * this is only the default, and an empty string means "nothing found — say so".
+ */
+export function defaultHeadlessBrowser() {
+  const candidates =
+    process.platform === 'darwin'
+      ? ['/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge', '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', '/Applications/Chromium.app/Contents/MacOS/Chromium']
+      : process.platform === 'win32'
+        ? ['C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe', 'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe']
+        : ['/usr/bin/microsoft-edge', '/usr/bin/google-chrome', '/usr/bin/chromium'];
+  return candidates.find((p) => existsSync(p)) ?? candidates[0];
+}
 
 const COMMON_HEADERS = { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' };
 

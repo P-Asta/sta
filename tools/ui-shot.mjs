@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-// Screenshot a sta UI page in mock mode with headless Edge. Normally run through
+// Screenshot a sta UI page in mock mode with headless Edge (or whichever Chromium is installed —
+// `defaultHeadlessBrowser`). Normally run through
 // tools/ui-shot.ps1 (same options, PowerShell-style names); see ui/README.md.
 //
 //   node tools/ui-shot.mjs --path '/sidebar/?mock' --out sidebar.png [--width 248] [--height 900]
@@ -28,9 +29,9 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { startStaticServer } from './ui-serve.mjs';
+import { defaultHeadlessBrowser, startStaticServer } from './ui-serve.mjs';
 
-const DEFAULT_EDGE = 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe';
+const DEFAULT_EDGE = defaultHeadlessBrowser();
 const toolsDir = path.dirname(fileURLToPath(import.meta.url));
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 /** A timeout that doesn't keep the process alive once everything else is done. */
@@ -64,7 +65,7 @@ function parseArgs(argv) {
   for (const k of ['width', 'height']) if (!Number.isInteger(o[k]) || o[k] < 1) throw new Error(`invalid --${k} ${o[k]}`);
   if (!Number.isFinite(o.budget) || o.budget < 0) throw new Error(`invalid --budget ${o.budget}`);
   if (!Number.isFinite(o.scale) || o.scale <= 0) throw new Error(`invalid --scale ${o.scale}`);
-  if (!existsSync(o.edge)) throw new Error(`Edge not found at ${o.edge} (pass --edge / -Edge)`);
+  if (!existsSync(o.edge)) throw new Error(`no headless browser at ${o.edge} (pass --edge / -Edge)`);
   return o;
 }
 

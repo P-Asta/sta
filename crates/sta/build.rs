@@ -1,4 +1,5 @@
-//! Build script [skeleton, frozen]: embeds the Windows resources into `sta.exe`.
+//! Build script [skeleton, frozen]: embeds the Windows resources into `sta.exe`, and on macOS
+//! records where the CEF framework lives so the app bundle can be assembled (platform/mac_bundle.rs).
 //!
 //! - `1 ICON res/sta.ico` (lowest id = Explorer/taskbar icon; also `Settings.chrome_app_icon_id`)
 //! - `1 RT_MANIFEST res/sta.exe.manifest` (PerMonitorV2 DPI, supportedOS, Common Controls v6)
@@ -14,6 +15,49 @@ fn main() {
 
     #[cfg(windows)]
     windows_resources();
+    #[cfg(target_os = "macos")]
+    macos_framework_dir();
+}
+
+/// The macOS binary has to be started from an app bundle that carries "Chromium Embedded
+/// Framework.framework" (docs/research/platform.md §6). `cef-dll-sys` finds the prebuilt CEF
+/// through `CEF_PATH` (set by `.cargo/config.toml`) but tells only its own dependents where it
+/// landed, so resolve it here the same way and bake the path into the binary: `mac_bundle.rs`
+/// copies or links the framework from there. An empty value means "not found at build time"; the
+/// bundler then reports it instead of building a bundle that cannot start.
+#[cfg(target_os = "macos")]
+fn macos_framework_dir() {
+    use std::{env, path::{Path, PathBuf}};
+
+    println!("cargo:rerun-if-env-changed=CEF_PATH");
+    const FRAMEWORK: &str = "Chromium Embedded Framework.framework";
+    let has_framework = |dir: &Path| dir.join(FRAMEWORK).is_dir();
+
+    let root = env::var_os("CEF_PATH")
+        .map(PathBuf::from)
+        .map(|p| if p.is_relative() {
+            // `.cargo/config.toml` sets it relative to the workspace root (two levels up).
+            PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR")).join("../..").join(p)
+        } else {
+            p
+        });
+    // `<CEF_PATH>/<cef version>/cef_macos_<arch>/` (the layout cef-dll-sys downloads into), or
+    // `<CEF_PATH>/` itself when it points straight at a distribution.
+    let found = root.and_then(|root| {
+        if has_framework(&root) {
+            return Some(root);
+        }
+        let mut versions: Vec<PathBuf> = std::fs::read_dir(&root).ok()?.flatten().map(|e| e.path()).collect();
+        versions.sort();
+        versions.into_iter().rev().find_map(|version| {
+            if has_framework(&version) {
+                return Some(version);
+            }
+            std::fs::read_dir(&version).ok()?.flatten().map(|e| e.path()).find(|d| has_framework(d))
+        })
+    });
+    let path = found.and_then(|p| p.canonicalize().ok()).unwrap_or_default();
+    println!("cargo:rustc-env=STA_CEF_DIR={}", path.display());
 }
 
 #[cfg(windows)]

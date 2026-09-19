@@ -20,7 +20,8 @@ import { fileURLToPath } from 'node:url';
 const root = resolve(join(dirname(fileURLToPath(import.meta.url)), '..'));
 const profile = process.argv.includes('--debug') ? 'debug' : 'release';
 const explicit = process.argv.slice(2).filter((a) => !a.startsWith('--'));
-const binaries = explicit.length ? explicit.map((p) => resolve(p)) : ['sta.exe', 'sta-mcp.exe'].map((n) => join(root, 'target', profile, n));
+const exe = process.platform === 'win32' ? '.exe' : '';
+const binaries = explicit.length ? explicit.map((p) => resolve(p)) : [`sta${exe}`, `sta-mcp${exe}`].map((n) => join(root, 'target', profile, n));
 
 /** Tool names, straight from the catalog source: the check can't drift from what exists. */
 function toolNames() {

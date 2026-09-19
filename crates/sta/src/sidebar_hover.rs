@@ -834,8 +834,9 @@ pub fn debug_input(payload: &serde_json::Value) -> Result<serde_json::Value, (i3
 }
 
 /// `debug.postMouse` posted a mouse message at window client DIP `(x, y)`: while a virtual pointer
-/// is set it follows, so the poll sees the same pointer and buttons as Chromium.
-#[cfg(debug_assertions)]
+/// is set it follows, so the poll sees the same pointer and buttons as Chromium. (`debug.postMouse`
+/// posts Win32 messages, so this has no caller on other platforms.)
+#[cfg(all(debug_assertions, windows))]
 pub fn debug_note_mouse(x: f64, y: f64, buttons: Option<bool>) {
     let Some(mut v) = VIRTUAL.get() else { return };
     if (v.x, v.y) != (x, y) {

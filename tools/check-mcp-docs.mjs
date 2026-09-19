@@ -26,7 +26,8 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const bridge = process.env.MCP_BRIDGE ? resolve(process.env.MCP_BRIDGE) : join(root, 'target', 'debug', 'sta-mcp.exe');
+const exe = process.platform === 'win32' ? '.exe' : '';
+const bridge = process.env.MCP_BRIDGE ? resolve(process.env.MCP_BRIDGE) : join(root, 'target', 'debug', `sta-mcp${exe}`);
 
 function listTools() {
   return new Promise((ok, fail) => {

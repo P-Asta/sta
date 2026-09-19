@@ -23,7 +23,7 @@ ui/
     icons.js              <Icon> + 70 original 24px glyphs (`ICON_NAMES` is the live list)
     components.js         Button, IconButton, Menu, Popover, Select, TextField, …
     hooks.js              generic Preact hooks
-    util.js               formatting, host colors, debounce/throttle, UiState helpers
+    util.js               formatting, host colors, debounce/throttle, shortcut labels, UiState helpers
     chrome.js/.css        NavButtons + UrlPill, shared by the sidebar and the top bar
     internal-page.js/.css page shell and building blocks of settings/archive/history/boosts
     agent-ui.js           AI agents: AgentGlyph, client/tool/error phrases, chip visibility (no IPC)
@@ -548,7 +548,7 @@ labels, `aria-*` state and support the keyboard.
 |---|---|
 | `Button` | `variant='default'\|'primary'\|'ghost'\|'danger'`, `size='md'\|'sm'`, `icon`, `iconEnd`, `buttonRef`, plus any `<button>` attributes |
 | `IconButton` | `icon`, `label` (required: `aria-label` and tooltip; `title=${null}` hides the tooltip), `size='sm'\|'md'\|'lg'`, `iconSize`, `pressed`, `muted`, `buttonRef` |
-| `Kbd` | `keys="Ctrl+Shift+K"` or `['Alt','1…9']`; `Ctrl++` renders "Ctrl" and "+" |
+| `Kbd` | `keys="Ctrl+Shift+K"` or `['Alt','1…9']`; `Ctrl++` renders "Ctrl" and "+"; written for the platform (⌘ ⇧ on macOS, `util.keyParts`) |
 | `Favicon` | `src`, `host`, `size=16`, `dim`, `lazy=true`, `title` |
 | `Spinner` | `size=14`, `label='Loading'` (`null` = decorative) |
 | `ProgressBar` | `value` (0–1, `null` = indeterminate), `height=4`, `bare`, `label` |
@@ -626,6 +626,11 @@ Component notes:
     `startOfDay`.
 - **Hosts:** `hostLetterColor(host)`, `hostHue`, `hostLetter`, `hashString` (FNV-1a),
   `firstGraphemes(text, n)`, `hostOf(url)`.
+- **Shortcut labels:** `shortcut('Ctrl+Shift+C')` → `Ctrl+Shift+C`, or `⌘⇧C` on macOS;
+  `keyParts(spec)` for the `<${Kbd}>` chips; `keyLabel(key)` for one key; `IS_MAC`. sta's shortcut
+  table is written with Ctrl and read as ⌘ on macOS (`crates/sta/src/keyboard.rs`), so every
+  user-visible shortcut goes through these — never a hard-coded "Ctrl+…" string. `Kbd` and the menu
+  `hint` do it for you. The platform comes from the user agent, so no surface has to ask the shell.
 - **Functions:** `clamp`, `debounce(fn, ms)` (`.cancel` / `.flush`), `throttle(fn, ms)`
   (leading and trailing, `.cancel`), `classNames(...)`, `deepEqual`. (For "one frame from now", use
   `motion.closeBlank()` or `motion.settle()`: a bare `requestAnimationFrame` never fires while a page

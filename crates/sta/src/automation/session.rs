@@ -7,10 +7,10 @@
 //! connection is logged to `agent.log` without content.
 
 use super::tools::{self, Ctx, Output};
-use super::{endpoint, exec, guards, pipe, win};
+use super::{endpoint, exec, guards, pipe};
 use crate::{controller, task};
 use sta_core::agent::channel::{
-    self as channel, APPROVAL_HOLD_MS, BridgeMessage, BrowserMessage, ByeReason, Content, HELLO_TIMEOUT_MS, LineReader, MAX_DEADLINE_MS, PIPE_PREFIX,
+    self as channel, APPROVAL_HOLD_MS, BridgeMessage, BrowserMessage, ByeReason, Content, HELLO_TIMEOUT_MS, LineReader, MAX_DEADLINE_MS,
     PROTOCOL_VERSION, PendingReason, RefusedCode, ToolError, to_line,
 };
 use sta_core::agent::{AgentClientInfo, ErrorCode, tools as catalog};
@@ -185,11 +185,10 @@ pub(super) fn access() -> AgentAccess {
 pub fn set_endpoint(enabled: bool) {
     let running = SERVER.with(|s| s.borrow().is_some());
     if enabled && !running {
-        let Some(random) = win::random_hex(16) else {
-            log_error!("agent: no random bytes for the pipe name");
+        let Some(name) = pipe::endpoint_name() else {
+            log_error!("agent: cannot name the agent channel");
             return;
         };
-        let name = format!("{PIPE_PREFIX}{random}");
         let sink: pipe::EventSink = Arc::new(|conn, event| task::post_ui_from_any_thread(move || on_pipe_event(conn, event)));
         match pipe::start(&name, sink) {
             Ok(server) => {

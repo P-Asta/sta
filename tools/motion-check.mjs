@@ -50,9 +50,9 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { startStaticServer } from './ui-serve.mjs';
+import { defaultHeadlessBrowser, startStaticServer } from './ui-serve.mjs';
 
-const DEFAULT_EDGE = 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe';
+const DEFAULT_EDGE = defaultHeadlessBrowser();
 const toolsDir = path.dirname(fileURLToPath(import.meta.url));
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const timeout = (ms) => new Promise((r) => setTimeout(r, ms).unref());

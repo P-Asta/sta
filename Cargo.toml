@@ -19,6 +19,12 @@ serde_json = "1"
 rust-embed = "8.12"
 arboard = { version = "3.6", default-features = false }
 windows-sys = "0.61"
+# macOS platform integration (platform/mac.rs): the NSApplication subclass CEF requires, the
+# system theme, clipboard, panels and the cursor poll. `cef` itself already depends on objc2.
+objc2 = "0.6"
+objc2-app-kit = "0.3"
+objc2-foundation = "0.3"
+dispatch2 = "0.3"
 embed-resource = "3"
 url = "2.5"
 psl = "2"

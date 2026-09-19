@@ -7,6 +7,7 @@ import { dispatch, startSurface } from '/common/ipc.js';
 import { Icon } from '/common/icons.js';
 import { Favicon, IconButton, Spinner } from '/common/components.js';
 import * as motion from '/common/motion.js';
+import { shortcut } from '/common/util.js';
 
 const mount = document.getElementById('app');
 const report = (e) => console.error('[peek]', e);
@@ -56,7 +57,7 @@ function PeekHeader({ peek }) {
       <${IconButton} icon="close" label="Close (Esc)" class="peek-btn" onClick=${() => leave({ type: 'closePeek', focusLost: false })} />
       ${!popup &&
       html`<${IconButton} icon="split" label="Open in split view" class="peek-btn" onClick=${() => leave({ type: 'expandPeek', split: true })} />
-        <button type="button" class="icon-btn peek-btn" aria-label="Open as tab (Ctrl+O)" title="Open as tab (Ctrl+O)" onClick=${() => leave({ type: 'expandPeek', split: false })}>
+        <button type="button" class="icon-btn peek-btn" aria-label=${`Open as tab (${shortcut('Ctrl+O')})`} title=${`Open as tab (${shortcut('Ctrl+O')})`} onClick=${() => leave({ type: 'expandPeek', split: false })}>
           <${ExpandIcon} />
         </button>`}
     </div>

@@ -1,4 +1,4 @@
-// Settings › Animations (FINAL PLAN §6): the master switch, "Follow Windows animation effects" with
+// Settings › Animations (FINAL PLAN §6): the master switch, "Follow system animation effects" with
 // a live status line, the eight collapsible groups, and Reset to defaults.
 //
 // The catalog itself lives in `/common/motion-catalog.js`, which the mock backend and
@@ -14,7 +14,7 @@ import { dispatch } from '/common/ipc.js';
 import { Icon } from '/common/icons.js';
 import { Button, Toggle, useCountPop } from '/common/components.js';
 import { Disclosure } from '/common/internal-page.js';
-import { classNames } from '/common/util.js';
+import { classNames, IS_MAC } from '/common/util.js';
 import { ANIMATION_GROUPS, animationSettings, groupOn, isDefaultAnimations, keyOwnValue } from '/common/motion-catalog.js';
 
 const report = (e) => console.error('[settings]', e);
@@ -106,17 +106,24 @@ export function AnimationsSection({ state }) {
     });
 
   // The live line is gated on the level core resolved, never on a second copy of the level rule:
-  // `reduced` *is* "on, following Windows, and Windows says no", and with the master switch off the
-  // app is at `off` — where claiming reduced motion would be wrong, and is announced (role=status).
+  // `reduced` *is* "on, following the system, and the system says no", and with the master switch
+  // off the app is at `off` — where claiming reduced motion would be wrong, and is announced
+  // (role=status). The system setting has a different name on each platform (`platform::mac.rs`
+  // reads macOS' "Reduce motion"), so the wording follows it.
+  const followLabel = IS_MAC ? 'Follow Reduce motion' : 'Follow Windows animation effects';
   const followDesc = html`<span
-      >Windows has one switch for animation in every app (Settings › Accessibility › Visual effects).
-      With this on, turning it off there gives sta reduced motion: things fade instead of
-      moving.</span
+      >${IS_MAC
+        ? 'macOS has one switch for motion in every app (System Settings › Accessibility › Display › Reduce motion). With this on, turning that on gives sta reduced motion: things fade instead of moving.'
+        : 'Windows has one switch for animation in every app (Settings › Accessibility › Visual effects). With this on, turning it off there gives sta reduced motion: things fade instead of moving.'}</span
     >
     ${level === 'reduced' &&
     html`<span class="set-note" role="status">
       <${Icon} name="info" size=${14} />
-      <span>Windows has animation effects turned off, so sta is using reduced motion right now.</span>
+      <span
+        >${IS_MAC
+          ? 'Reduce motion is on, so sta is using reduced motion right now.'
+          : 'Windows has animation effects turned off, so sta is using reduced motion right now.'}</span
+      >
     </span>`}`;
 
   return html`<section id="animations" class="set-section" aria-labelledby="animations-title">
@@ -127,7 +134,7 @@ export function AnimationsSection({ state }) {
         size="sm"
         icon="undo"
         disabled=${atDefaults}
-        title=${atDefaults ? 'Every animation is already at its default' : 'Turn every animation back on and follow Windows again'}
+        title=${atDefaults ? 'Every animation is already at its default' : 'Turn every animation back on and follow the system again'}
         onClick=${() => patch({ reset: true })}
         >Reset to defaults<//
       >
@@ -147,13 +154,13 @@ export function AnimationsSection({ state }) {
       </div>
       <div class="ip-setting">
         <div class="ip-setting-text">
-          <span class="ip-setting-label">Follow Windows animation effects</span>
+          <span class="ip-setting-label">${followLabel}</span>
           <span class="ip-setting-desc">${followDesc}</span>
         </div>
         <div class="ip-setting-control">
           <${Toggle}
             checked=${animations.followSystem}
-            ariaLabel="Follow Windows animation effects"
+            ariaLabel=${followLabel}
             onChange=${(v) => patch({ followSystem: v })}
           />
         </div>

@@ -27,7 +27,7 @@ import { html, useEffect, useLayoutEffect, useRef, useState } from '/common/vend
 import { dispatch, isMock } from '/common/ipc.js';
 import { Icon } from '/common/icons.js';
 import { Button, Favicon, IconButton, Toggle } from '/common/components.js';
-import { classNames } from '/common/util.js';
+import { classNames, shortcut } from '/common/util.js';
 
 const report = (e) => console.error('[settings/extensions]', e);
 const send = (command) => dispatch(command).catch(report);
@@ -253,7 +253,7 @@ export function ExtensionsSection({ state }) {
       ${items.length === 0
         ? html`<div class="xs-empty">
             <${Icon} name="puzzle" size=${18} />
-            <span>${'No extensions installed. sta runs Chrome extensions — use '}<b>Get extensions</b>${', then press '}<b>Ctrl+E</b>${' to use them.'}</span>
+            <span>${'No extensions installed. sta runs Chrome extensions — use '}<b>Get extensions</b>${', then press '}<b>${shortcut('Ctrl+E')}</b>${' to use them.'}</span>
           </div>`
         : items.map(
             (item) => html`<${Row}
@@ -268,7 +268,7 @@ export function ExtensionsSection({ state }) {
           )}
     </div>
     <p class="xs-note">
-      ${'Extensions run the way Chrome runs them, but sta has no extension toolbar: press '}<b>Ctrl+E</b>${' '}
+      ${'Extensions run the way Chrome runs them, but sta has no extension toolbar: press '}<b>${shortcut('Ctrl+E')}</b>${' '}
       ${"to open one. Toolbar-click actions, extension shortcuts and side panels don't work yet. Removing an extension opens Chrome's own confirmation."}
     </p>
   </section>`;

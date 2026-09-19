@@ -12,7 +12,7 @@ import { html, useEffect, useLayoutEffect, useRef, useState } from './vendor/htm
 import { dispatch } from './ipc.js';
 import { Icon } from './icons.js';
 import { IconButton, Menu } from './components.js';
-import { classNames } from './util.js';
+import { classNames, shortcut } from './util.js';
 import * as motion from './motion.js';
 
 const fire = (command) => dispatch(command).catch((e) => console.error('[chrome] dispatch failed', command, e));
@@ -46,7 +46,7 @@ export function NavButtons({ current, size = 'md' }) {
     <${IconButton}
       icon=${loading ? 'stop' : 'reload'}
       label=${loading ? 'Stop' : 'Reload'}
-      title=${loading ? 'Stop loading (Esc)' : 'Reload (Ctrl+R)'}
+      title=${loading ? 'Stop loading (Esc)' : `Reload (${shortcut('Ctrl+R')})`}
       size=${size}
       disabled=${!current}
       onClick=${(e) => fire(loading ? { type: 'stopLoad' } : { type: 'reload', ignoreCache: e.shiftKey })}
@@ -177,8 +177,8 @@ export function UrlPill({ current, compact = false, class: className }) {
     <button
       type="button"
       class="url-pill-main"
-      title=${current ? current.url : 'Search or enter URL (Ctrl+T)'}
-      aria-label=${current ? `Address: ${current.url}. Edit (Ctrl+L)` : 'Search or enter URL'}
+      title=${current ? current.url : `Search or enter URL (${shortcut('Ctrl+T')})`}
+      aria-label=${current ? `Address: ${current.url}. Edit (${shortcut('Ctrl+L')})` : 'Search or enter URL'}
       onClick=${open}
     >
       <span class=${`url-pill-glyph tone-${security.tone}`} title=${security.label ?? undefined}>
@@ -192,7 +192,7 @@ export function UrlPill({ current, compact = false, class: className }) {
       html`<button
         type="button"
         class="url-pill-zoom"
-        title=${`Zoom ${zoom}% · click to reset (Ctrl+0)`}
+        title=${`Zoom ${zoom}% · click to reset (${shortcut('Ctrl+0')})`}
         aria-label=${`Zoom ${zoom}%. Reset zoom`}
         onClick=${(e) => {
           e.stopPropagation();
@@ -216,7 +216,7 @@ export function UrlPill({ current, compact = false, class: className }) {
         size="sm"
         iconSize=${13}
         label="Copy URL"
-        title="Copy URL (Ctrl+Shift+C)"
+        title=${`Copy URL (${shortcut('Ctrl+Shift+C')})`}
         buttonRef=${copyButton}
         onClick=${copy}
       />

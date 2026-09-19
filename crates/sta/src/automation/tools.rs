@@ -63,7 +63,7 @@ pub(super) fn invalid(message: impl Into<String>) -> ToolError {
 }
 
 pub(super) fn nonce() -> String {
-    super::win::random_hex(6).unwrap_or_else(|| format!("{:x}", Instant::now().elapsed().as_nanos()))
+    super::random_hex(6).unwrap_or_else(|| format!("{:x}", Instant::now().elapsed().as_nanos()))
 }
 
 // ----------------------------------------------------------------------------------- tab queue

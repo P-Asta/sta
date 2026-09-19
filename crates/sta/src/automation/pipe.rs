@@ -10,6 +10,7 @@
 //! - A connection whose client runs in another logon session is dropped at once.
 //!
 //! Public API:
+//! - `pub fn endpoint_name() -> Option<String>` — the pipe name to publish and create
 //! - `pub fn start(name: &str, on_event: EventSink) -> Result<Server, String>`; `Server::stop(self)`
 //! - `pub fn send(conn: u64, bytes: Vec<u8>) -> bool`, `pub fn close(conn: u64)` (after pending writes)
 //! - `pub enum PipeEvent { Connected(ClientIdentity), Data(Vec<u8>), Closed }`
@@ -122,6 +123,11 @@ fn create_instance(name: &[u16], sd: &SecurityDescriptor, first: bool) -> Result
         return Err(unsafe { GetLastError() });
     }
     Ok(OwnedHandle(h))
+}
+
+/// The pipe to publish and create: one instance of a name no one can guess.
+pub fn endpoint_name() -> Option<String> {
+    Some(format!("{}{}", sta_core::agent::channel::PIPE_PREFIX, win::random_hex(16)?))
 }
 
 /// Creates the first pipe instance (failing if the name exists) and starts listening.

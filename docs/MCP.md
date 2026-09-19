@@ -2,10 +2,15 @@
 
 sta can be used by AI agents — Claude Code, Claude Desktop, VS Code, Cursor or any other
 [Model Context Protocol](https://modelcontextprotocol.io/) client. The agent talks to a small stdio
-MCP server, `sta-mcp.exe`, that ships next to `sta.exe`. The server forwards tool calls
-to the running browser over a local named pipe that only your Windows account can open. The
-browser checks every call against your settings and drives pages through Chromium's DevTools
-protocol **inside its own process**: no remote-debugging port is ever opened.
+MCP server, `sta-mcp.exe` (`sta-mcp` on macOS), that ships next to the browser. The server forwards
+tool calls to the running browser over a local channel that only your own account can open — a named
+pipe on Windows, a Unix domain socket in your data directory on macOS. The browser checks every call
+against your settings and drives pages through Chromium's DevTools protocol **inside its own
+process**: no remote-debugging port is ever opened.
+
+Paths in this document are Windows ones. On macOS, `sta-mcp` lives inside the app bundle at
+`sta.app/Contents/MacOS/sta-mcp`, and the profile is `~/Library/Application Support/sta`
+(`sta Dev` for a debug build).
 
 한국어 안내: [`docs/MCP.ko.md`](MCP.ko.md).
 
@@ -33,10 +38,12 @@ protocol **inside its own process**: no remote-debugging port is ever opened.
    ▼
  sta-mcp.exe                      crates/sta-mcp
    │  static tools/list; every tools/call is forwarded
-   │  NDJSON over \\.\pipe\sta-agent-<128 random bits>   (name in <data>\sta\agent-endpoint.json)
+   │  NDJSON over \\.\pipe\sta-agent-<128 random bits>, or <data>/sta/agent.sock on macOS
+   │                                        (whichever it is, named in <data>\sta\agent-endpoint.json)
    ▼
  sta.exe                          crates/sta/src/automation/
-   ├─ pipe.rs      named-pipe server (your account only, same logon session)
+   ├─ pipe.rs      the channel server: a named pipe (your account, same logon session), or
+   │               socket.rs, a 0600 socket in your data directory (macOS, Linux)
    ├─ session.rs   hello → your approval → session; rate limits; Stop
    ├─ policy       access level, tab scope, site approval, blocked and local-network hosts
    ├─ tools*.rs    the 23 tools
@@ -46,7 +53,7 @@ protocol **inside its own process**: no remote-debugging port is ever opened.
 ```
 
 - **Off by default.** Nothing listens until you set *Agent access* to *Read only* or *Full* in
-  Settings → AI agents (MCP). Turning it off closes the pipe and disconnects every agent.
+  Settings → AI agents (MCP). Turning it off closes the channel and disconnects every agent.
 - **You approve every new client** (once per session, or always for signed programs) and, by
   default, **every new site** an agent wants to use.
 - **Agents see only agent tabs**: tabs agents opened and tabs you share with agents. Agent tabs are
@@ -61,7 +68,9 @@ protocol **inside its own process**: no remote-debugging port is ever opened.
 
 1. **Install or build sta.** `sta-mcp.exe` sits next to `sta.exe`
    (`cargo build -p sta -p sta-mcp` puts both in `target\debug\`, and a debug build uses
-   the `%LOCALAPPDATA%\sta Dev` profile).
+   the `%LOCALAPPDATA%\sta Dev` profile). On macOS they are `sta-mcp` and `sta` in
+   `target/debug/` (a released build has both in `sta.app/Contents/MacOS/`), and the debug profile
+   is `~/Library/Application Support/sta Dev`.
 2. **Turn on agent access**: Settings → AI agents (MCP) → *Agent access* → *Full* (or *Read only*).
 3. **Register the MCP server** with your client. Settings → AI agents (MCP) → *Connect a client*
    shows the exact snippet for this installation with a Copy button (§3) — use it: the
@@ -70,6 +79,13 @@ protocol **inside its own process**: no remote-debugging port is ever opened.
 
    ```powershell
    claude mcp add sta -s user -- "C:\Program Files\sta\sta-mcp.exe"
+   claude mcp list
+   ```
+
+   …or, on macOS:
+
+   ```bash
+   claude mcp add sta -s user -- /Applications/sta.app/Contents/MacOS/sta-mcp
    claude mcp list
    ```
 
@@ -920,13 +936,13 @@ scroll        {"ref": "5.2.40"}
 
 ### 9.1 What is protected, and what isn't
 
-- **Protected against:** other Windows users and pipe squatters; low-integrity and AppContainer
-  processes (sandboxed apps) — they can neither open the browser's pipe nor pose as the browser to
-  the MCP server; web pages (they can't reach the pipe,
+- **Protected against:** other users of the machine and pipe squatters; on Windows also
+  low-integrity and AppContainer processes (sandboxed apps) — they can neither open the browser's
+  pipe nor pose as the browser to the MCP server; web pages (they can't reach the channel,
   and content an agent reads can't widen its scope, access level or approved sites); agents reaching
   sta's own pages, local files, other applications or browser-wide state (cookies, storage,
   settings, other profiles).
-- **Not protected against:** malware running as your Windows user at medium integrity — it could
+- **Not protected against:** malware running as your own user (at medium integrity on Windows) — it could
   drive the MCP server or read the profile anyway. sta's renderer processes run without a
   sandbox at medium integrity, so a renderer exploit counts as such malware.
 - **Consent, not authentication.** A client's name is whatever it says. The prompt adds what the
@@ -937,6 +953,22 @@ scroll        {"ref": "5.2.40"}
   client.
 
 ### 9.2 Channel
+
+On macOS and Linux the channel is a Unix domain socket, `<data>/sta/agent.sock`:
+
+- it is created inside **your own data directory** at mode `0600`, so the file system is what keeps
+  other users out (a name no one can guess, a DACL and an integrity label are the Windows answer to
+  the same question — its pipe namespace is shared by every user and every sandbox);
+- a socket file left behind by a crash is replaced only after a connection attempt proves that
+  nothing is listening on it, so two browsers can never share one channel;
+- the browser drops any client whose **uid** is not yours, and the bridge checks, before it writes
+  anything, that the socket is served by your uid and by **the process the endpoint file names** —
+  both read from the kernel (`getsockopt(SOL_LOCAL, LOCAL_PEERCRED / LOCAL_PEERPID)`), never from
+  anything the peer sends (`endpoint_untrusted` otherwise);
+- what the Windows channel has and this one does not: the Authenticode signer of the program that
+  started the bridge, so *Always allow* (which is keyed on it) is not offered there.
+
+On Windows:
 
 - The pipe `\\.\pipe\sta-agent-<128 random bits>` is created with
   `FILE_FLAG_FIRST_PIPE_INSTANCE` (a squatted name fails), `PIPE_REJECT_REMOTE_CLIENTS` and the

@@ -121,6 +121,8 @@ pub fn dialog(args: &Value) -> Result<Output, ToolError> {
     }
     let press = opt_str(args, "press").unwrap_or_else(|| "enter".to_string());
     // The keys a dialog answers: its default button, cancel, the focused button, and the way to it.
+    // (Only the Windows branch below sends it; the argument is still validated everywhere.)
+    #[cfg_attr(not(windows), allow(unused_variables))]
     let vk: u16 = match press.as_str() {
         "enter" => 0x0D,
         "escape" => 0x1B,

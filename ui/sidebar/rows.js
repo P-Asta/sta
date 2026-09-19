@@ -5,7 +5,7 @@
 import { html, useLayoutEffect, useRef } from '/common/vendor/htm-preact.js';
 import { Icon } from '/common/icons.js';
 import { AudioBars, Favicon, IconButton, Spinner } from '/common/components.js';
-import { classNames } from '/common/util.js';
+import { classNames, shortcut } from '/common/util.js';
 import * as motion from '/common/motion.js';
 import { sb } from './controller.js';
 import { tabMenuItems, folderMenuItems, splitPaneMenuItems } from './menus.js';
@@ -326,7 +326,7 @@ function TabRowImpl({ tab, section, depth, container, next, ancestors, renameSeq
       iconSize=${12}
       tabindex="-1"
       label=${pinnedLike ? 'Close tab (keeps it pinned)' : 'Archive tab'}
-      title=${pinnedLike ? 'Close' : 'Close (Ctrl+W)'}
+      title=${pinnedLike ? 'Close' : `Close (${shortcut('Ctrl+W')})`}
       onClick=${(e) => {
         e.stopPropagation();
         closeByPointer(tab.id);
@@ -592,7 +592,7 @@ export function NewTabRow({ spaceId, firstToday }) {
   >
     <span class="row-icon"><${Icon} name="plus" size=${16} strokeWidth=${1.75} /></span>
     <span class="row-title">New Tab</span>
-    <span class="row-hint" aria-hidden="true">Ctrl+T</span>
+    <span class="row-hint" aria-hidden="true">${shortcut('Ctrl+T')}</span>
   </div>`;
 }
 
@@ -609,7 +609,7 @@ export function TodayDivider({ spaceId, hasToday, firstToday }) {
     html`<button
       type="button"
       class="today-clear"
-      title="Archive Today's tabs (Ctrl+Shift+K)"
+      title=${`Archive Today's tabs (${shortcut('Ctrl+Shift+K')})`}
       onClick=${() => fire({ type: 'clearToday', space: spaceId })}
     ><${Icon} name="arrow-down" size=${11} strokeWidth=${2} /><span>Clear</span></button>`}
   </div>`;

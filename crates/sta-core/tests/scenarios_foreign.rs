@@ -250,8 +250,10 @@ fn refused_urls_never_spend_the_budget() {
 fn install_and_block_toasts() {
     let mut h = Harness::new();
     h.apply(Command::ExtensionInstalled { id: EXT.into(), name: "AdBlock".into(), external: false });
-    // sta has no extension toolbar, so a fresh install is told how to use it (FINAL PLAN §2).
-    assert_eq!(h.toast().map(|t| t.message), Some("AdBlock added · Ctrl+E".into()));
+    // sta has no extension toolbar, so a fresh install is told how to use it (FINAL PLAN §2),
+    // with the shortcut spelled the way this platform spells it.
+    let picker = if cfg!(target_os = "macos") { "⌘E" } else { "Ctrl+E" };
+    assert_eq!(h.toast().map(|t| t.message), Some(format!("AdBlock added · {picker}")));
     h.apply(Command::ExtensionInstalled { id: OTHER.into(), name: "NordPass".into(), external: true });
     assert_eq!(h.toast().map(|t| t.message), Some("NordPass added by another program, off until you allow it".into()));
     // One line of the toast holds about 70 characters (ui/toast/toast.css).
@@ -263,8 +265,8 @@ fn install_and_block_toasts() {
     assert!(h.toast().is_none());
     h.apply(Command::ExtensionInstalled { id: EXT.into(), name: "N".repeat(100), external: false });
     let message = h.toast().unwrap().message;
-    assert!(message.chars().count() <= 48 + " added · Ctrl+E".chars().count(), "{message}");
-    assert!(message.contains('…') && message.ends_with(" added · Ctrl+E"), "{message}");
+    assert!(message.chars().count() <= 48 + format!(" added · {picker}").chars().count(), "{message}");
+    assert!(message.contains('…') && message.ends_with(&format!(" added · {picker}")), "{message}");
 
     h.apply(Command::ForeignBlocked { reason: ForeignBlockReason::RateLimited });
     assert_eq!(h.toast().map(|t| t.message), Some("An extension keeps opening windows; sta blocked them".into()));

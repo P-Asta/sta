@@ -195,8 +195,8 @@ fn test_endpoint() -> Option<&'static str> {
     URL.get_or_init(|| std::env::var("STA_SUGGEST_URL").ok().filter(|u| !u.trim().is_empty())).as_deref()
 }
 
-const UR_FLAG_DISABLE_CACHE: i32 = sys::cef_urlrequest_flags_t::UR_FLAG_DISABLE_CACHE.0;
-const UR_FLAG_NO_RETRY_ON_5XX: i32 = sys::cef_urlrequest_flags_t::UR_FLAG_NO_RETRY_ON_5XX.0;
+const UR_FLAG_DISABLE_CACHE: i32 = sys::cef_urlrequest_flags_t::UR_FLAG_DISABLE_CACHE.0 as i32;
+const UR_FLAG_NO_RETRY_ON_5XX: i32 = sys::cef_urlrequest_flags_t::UR_FLAG_NO_RETRY_ON_5XX.0 as i32;
 
 /// `GET url` on the global request context, reported to a [`SuggestClient`] for
 /// `(browser_id, id)`. `None` when CEF can't create the request.

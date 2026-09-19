@@ -59,13 +59,14 @@ const PROGRESS_EVERY_MS: i64 = 400;
 /// The flag that turns a staged `sta.exe` into the helper that replaces the installed one.
 pub const APPLY_FLAG: &str = "--sta-apply-update";
 /// The helper gives the browser this long to exit before it gives up.
+#[cfg(windows)]
 const WAIT_FOR_EXIT_MS: u32 = 30_000;
 /// `CREATE_NO_WINDOW`: neither the helper nor the browser it starts gets a console.
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
-const UR_FLAG_DISABLE_CACHE: i32 = sys::cef_urlrequest_flags_t::UR_FLAG_DISABLE_CACHE.0;
-const UR_FLAG_NO_RETRY_ON_5XX: i32 = sys::cef_urlrequest_flags_t::UR_FLAG_NO_RETRY_ON_5XX.0;
+const UR_FLAG_DISABLE_CACHE: i32 = sys::cef_urlrequest_flags_t::UR_FLAG_DISABLE_CACHE.0 as i32;
+const UR_FLAG_NO_RETRY_ON_5XX: i32 = sys::cef_urlrequest_flags_t::UR_FLAG_NO_RETRY_ON_5XX.0 as i32;
 
 /// What a request in flight is for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -281,17 +282,7 @@ fn unpack(archive: &Path, dir: &Path) -> Result<PathBuf, String> {
     let bytes = fs::read(archive).map_err(|e| format!("{}: {e}", archive.display()))?;
     let files = crate::unzip::extract(&bytes, dir)?;
     log_debug!("update: {files} files unpacked into {}", dir.display());
-    // The payload is the directory that holds the browser.
-    let root = if dir.join(exe_name()).exists() {
-        dir.to_path_buf()
-    } else {
-        fs::read_dir(dir)
-            .map_err(|e| e.to_string())?
-            .flatten()
-            .map(|e| e.path())
-            .find(|p| p.join(exe_name()).exists())
-            .ok_or_else(|| format!("no {} in the archive", exe_name()))?
-    };
+    let root = payload_root(dir).ok_or_else(|| format!("no {} in the archive", exe_name()))?;
     Ok(root)
 }
 
@@ -308,7 +299,7 @@ pub fn install_now() -> bool {
         fail("cannot find the directory sta runs from");
         return false;
     };
-    let helper = source.join(exe_name());
+    let helper = exe_in(&source);
     if !helper.exists() {
         fail(format!("the staged build has no {}", exe_name()));
         return false;
@@ -383,7 +374,7 @@ pub fn apply_from_command_line() -> bool {
             // next attempt); start what is there so the user is not left with nothing.
         }
     }
-    let exe = target.join(exe_name());
+    let exe = exe_in(&target);
     let mut browser = Process::new(&exe);
     // The window it opens is its own; this only stops a console being allocated for it.
     #[cfg(windows)]
@@ -471,6 +462,33 @@ const fn exe_name() -> &'static str {
     }
 }
 
+/// The browser executable inside a payload root — an update's staged copy or the installed one.
+/// On macOS the root is the `.app` bundle and the binary lives in `Contents/MacOS`.
+fn exe_in(root: &Path) -> PathBuf {
+    #[cfg(target_os = "macos")]
+    {
+        root.join("Contents/MacOS").join(exe_name())
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        root.join(exe_name())
+    }
+}
+
+/// The payload inside an unpacked archive: the directory that holds the browser. A release wraps
+/// everything in `sta-<version>-<platform>/`, and on macOS the bundle is another level in
+/// (`…/sta.app`), so three levels are searched.
+fn payload_root(dir: &Path) -> Option<PathBuf> {
+    let mut level = vec![dir.to_path_buf()];
+    for _ in 0..3 {
+        if let Some(found) = level.iter().find(|p| exe_in(p).is_file()) {
+            return Some(found.clone());
+        }
+        level = level.iter().filter_map(|p| fs::read_dir(p).ok()).flatten().flatten().map(|e| e.path()).filter(|p| p.is_dir()).collect();
+    }
+    None
+}
+
 /// `<data>/updates`, created if needed. Outside the installed directory on purpose: the helper
 /// runs from in here while it replaces that one.
 fn staging_dir() -> std::io::Result<PathBuf> {
@@ -479,9 +497,19 @@ fn staging_dir() -> std::io::Result<PathBuf> {
     Ok(dir)
 }
 
-/// The directory sta was started from — what an update replaces.
+/// What an update replaces: the app bundle on macOS, the directory sta was started from
+/// elsewhere.
 fn install_dir() -> Option<PathBuf> {
-    std::env::current_exe().ok()?.parent().map(|p| p.to_path_buf())
+    // macOS installs are app bundles: the whole `sta.app` is replaced, not the directory the
+    // binary happens to sit in (the framework and the helper apps are in there too).
+    #[cfg(target_os = "macos")]
+    {
+        crate::platform::mac_bundle::main_bundle()
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        std::env::current_exe().ok()?.parent().map(|p| p.to_path_buf())
+    }
 }
 
 /// Drops staging directories left behind by an update that has been applied (startup). The build
@@ -674,4 +702,29 @@ pub fn debug_snapshot() -> serde_json::Value {
         "platform": sta_core::update::platform_key(),
         "manifestUrl": MANIFEST_URL,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// What `stage_archive` has to find in an unpacked release: the browser is one directory deep
+    /// (`sta-<version>-<platform>/`), and on macOS one more (`sta.app/Contents/MacOS/`).
+    #[test]
+    fn the_payload_is_found_inside_the_archive_wrapper() {
+        let root = std::env::temp_dir().join(format!("sta-payload-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let wrapper = root.join("sta-9.9.9-platform");
+        let payload = if cfg!(target_os = "macos") { wrapper.join("sta.app") } else { wrapper.clone() };
+        let exe = exe_in(&payload);
+        fs::create_dir_all(exe.parent().unwrap()).unwrap();
+        fs::write(&exe, b"binary").unwrap();
+
+        assert_eq!(payload_root(&root), Some(payload.clone()));
+        assert_eq!(payload_root(&wrapper), Some(payload.clone()));
+        // A directory with nothing that looks like a browser in it.
+        fs::remove_file(&exe).unwrap();
+        assert_eq!(payload_root(&root), None);
+        let _ = fs::remove_dir_all(&root);
+    }
 }

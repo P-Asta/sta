@@ -253,7 +253,7 @@ export const agentRequests = (getState) => ({
         on ? { id: 'endpoint', ok: true, detail: 'sta is listening for agents on a private pipe' } : { id: 'endpoint', ok: false, detail: "sta isn't listening for agents (turn access on)" },
         { id: 'bridge', ok: true, detail: 'C:\\Program Files\\sta\\sta-mcp.exe' },
       ];
-      if (on) steps.push({ id: 'channel', ok: true, detail: 'The MCP server reached sta (pid 12345) and verified its pipe' });
+      if (on) steps.push({ id: 'channel', ok: true, detail: 'The MCP server reached sta (pid 12345) and verified its channel' });
       setTimeout(() => resolve({ ok: steps.every((s) => s.ok), steps, ms: 420 }), 450);
     }),
 });

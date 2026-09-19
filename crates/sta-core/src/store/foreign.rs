@@ -159,8 +159,11 @@ impl Store {
                     self.toast(format!("{name} added by another program, off until you allow it"), None);
                 } else {
                     // sta has no extension toolbar, so the one thing a fresh install has to say is
-                    // *how to use it* (FINAL PLAN §2: "phase 3 appends · Ctrl+E").
-                    self.toast(format!("{name} added · Ctrl+E"), None);
+                    // *how to use it* (FINAL PLAN §2: "phase 3 appends · Ctrl+E"). This one is a
+                    // sentence, not a key chip the UI can relabel, so it spells the shortcut the
+                    // way this platform does (crates/sta/src/keyboard.rs).
+                    let extensions = if cfg!(target_os = "macos") { "⌘E" } else { "Ctrl+E" };
+                    self.toast(format!("{name} added · {extensions}"), None);
                 }
             }
             // The shell sends `Incognito` (only it can see a private request context). `RateLimited`

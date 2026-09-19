@@ -1,6 +1,48 @@
 // Shared helpers for sta UI surfaces: formatting, colors, timing and UiState traversal.
 // Pure functions only (no DOM access except where noted), safe to import from any surface.
 
+// ------------------------------------------------------------------------------------ shortcuts
+
+/**
+ * This build runs on macOS, where sta's shortcuts are ⌘-based: the accelerator table is written
+ * with Ctrl and read as ⌘ there (crates/sta/src/keyboard.rs, `PRIMARY_MODIFIER`). Read from the
+ * user agent, so every surface gets it without asking the shell.
+ */
+export const IS_MAC = /Mac|iPhone|iPad/i.test(globalThis.navigator?.userAgentData?.platform || globalThis.navigator?.platform || globalThis.navigator?.userAgent || '');
+
+/** How a modifier is written on macOS. Keys without a symbol (Esc, Tab, letters) keep their name. */
+const MAC_KEYS = { Ctrl: '⌘', Alt: '⌥', Shift: '⇧' };
+
+/**
+ * Combos that are not just the same table with ⌘ (keyboard.rs): History is ⌘Y on macOS, because
+ * ⌘H hides the app.
+ */
+const MAC_COMBOS = { 'Ctrl+H': 'Ctrl+Y' };
+
+/** One key's label on this platform: `keyLabel('Ctrl')` is "Ctrl", or "⌘" on macOS. */
+export function keyLabel(key) {
+  return (IS_MAC && MAC_KEYS[key]) || key;
+}
+
+/**
+ * The keys of a combo, for this platform: `keyParts('Ctrl+Shift+K')` → `['Ctrl', 'Shift', 'K']`,
+ * or `['⌘', '⇧', 'K']` on macOS. Accepts an array of key names too. `Ctrl++` is Ctrl and "+".
+ */
+export function keyParts(spec) {
+  const combo = (IS_MAC && MAC_COMBOS[spec]) || spec;
+  const parts = Array.isArray(combo) ? combo : String(combo ?? '').split(/\+(?=.)/);
+  return parts.map(keyLabel);
+}
+
+/**
+ * A combo as one string for titles and menu hints: `shortcut('Ctrl+Shift+C')` → "Ctrl+Shift+C", or
+ * "⌘⇧C" on macOS (where modifier symbols are written without separators).
+ */
+export function shortcut(spec) {
+  const parts = keyParts(spec);
+  return IS_MAC ? parts.join('') : parts.join('+');
+}
+
 // ------------------------------------------------------------------------------------ numbers
 
 /** Clamp `value` into `[min, max]` (NaN → `min`). */

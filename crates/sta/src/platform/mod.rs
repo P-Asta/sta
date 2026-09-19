@@ -1,11 +1,13 @@
 //! OS integration facade [owner: chrome].
 //!
 //! Responsibility: everything that talks to the operating system directly (not through CEF).
-//! Windows is the primary target (`win.rs`); other targets get inert fallbacks so the crate still
-//! type-checks.
+//! Windows is the primary target (`win.rs`), macOS the second (`mac.rs`, docs/research/platform.md
+//! §10); anything else gets inert fallbacks so the crate still type-checks.
 //!
-//! Window handles are passed as `isize` (raw HWND) so callers need no platform types and values
-//! can cross threads.
+//! Window handles are passed as `isize` (a raw `HWND` on Windows, the window's `NSView*` on macOS)
+//! so callers need no platform types and values can cross threads. [`handle_value`] turns what CEF
+//! hands out into that integer, and [`OsEvent`] is the native key event a `KeyboardHandler` sees
+//! (a `MSG*` on Windows, an `NSEvent*` on macOS) — both differ per platform in the bindings.
 //!
 //! Public API:
 //! - `pub fn system_dark_mode() -> bool` — OS app theme (registry `AppsUseLightTheme == 0`)
@@ -46,8 +48,50 @@ mod win;
 #[cfg(windows)]
 pub use win::*;
 
+#[cfg(target_os = "macos")]
+mod mac;
+
+#[cfg(target_os = "macos")]
+pub use mac::*;
+
+#[cfg(target_os = "macos")]
+pub mod mac_bundle;
+
 #[cfg(windows)]
 pub mod hidden_windows;
+
+/// The OS window handle CEF reports, as the integer the rest of the shell passes around
+/// (`HWND` on Windows, `NSView*` on macOS, an X11 window id on Linux).
+pub fn handle_value(handle: cef::sys::cef_window_handle_t) -> isize {
+    #[cfg(windows)]
+    {
+        handle.0 as isize
+    }
+    #[cfg(not(windows))]
+    {
+        handle as isize
+    }
+}
+
+/// The native event behind a key event in `KeyboardHandler` (`MSG*` on Windows, `NSEvent*`
+/// elsewhere). Only its presence is ever read ([`os_event_present`]): an event without one was
+/// synthesized (DevTools, automation), not typed by the user.
+#[cfg(windows)]
+pub type OsEvent<'a> = Option<&'a mut cef::sys::MSG>;
+#[cfg(not(windows))]
+pub type OsEvent<'a> = *mut u8;
+
+/// The key event carries an OS message (the user typed it).
+pub fn os_event_present(event: &OsEvent<'_>) -> bool {
+    #[cfg(windows)]
+    {
+        event.is_some()
+    }
+    #[cfg(not(windows))]
+    {
+        !event.is_null()
+    }
+}
 
 /// Inert stand-ins on other platforms (Chrome-created windows are a Windows-only concern today).
 #[cfg(not(windows))]
@@ -56,6 +100,7 @@ pub mod hidden_windows {
     pub struct WindowDescription {
         pub hwnd: isize,
         pub title: String,
+        pub cloaked: bool,
     }
     pub fn install(_main_hwnd: isize) {}
     pub fn uninstall() {}
@@ -64,6 +109,9 @@ pub mod hidden_windows {
     }
     pub fn show_root(_root: isize) {}
     pub fn forget_root(_root: isize) {}
+    /// Only the Windows half of the debug-only test surface asks (`test_hooks/native.rs`), so this
+    /// stand-in never has a caller.
+    #[allow(dead_code)]
     pub fn is_hidden(_hwnd: isize) -> bool {
         false
     }
@@ -80,7 +128,7 @@ pub mod hidden_windows {
         false
     }
     pub fn describe(hwnd: isize) -> WindowDescription {
-        WindowDescription { hwnd, title: String::new() }
+        WindowDescription { hwnd, title: String::new(), cloaked: false }
     }
     pub fn styles(_hwnd: isize) -> (u32, u32) {
         (0, 0)
@@ -129,7 +177,7 @@ pub struct CursorSample {
     pub clicked: bool,
 }
 
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "macos")))]
 mod fallback {
     use super::PathBuf;
 
@@ -182,7 +230,7 @@ mod fallback {
     }
 }
 
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "macos")))]
 pub use fallback::*;
 
 /// Most preferred OS UI language (`en-US`), or empty (CEF then uses en-US).

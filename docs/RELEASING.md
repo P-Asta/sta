@@ -32,7 +32,10 @@ git tag v0.2.0 → .github/workflows/release.yml → draft release (archives + l
    it, hashes it and leaves a **draft** release holding:
 
    - `sta-<version>-windows-x64.zip` — the browser, its CEF runtime and `sta-mcp.exe`;
-   - `latest.json` — `{version, pubDate, notes, platforms: {"windows-x86_64": {url, sha256, size}}}`.
+   - `sta-<version>-darwin-arm64.zip` — `sta.app`, with the CEF framework, the helper apps and
+     `sta-mcp` inside it;
+   - `latest.json` — `{version, pubDate, notes, platforms: {"windows-x86_64": {…}, "darwin-aarch64":
+     {…}}}`, merged from the per-platform manifests each build job uploads.
 4. Edit the draft's notes if the generated changelog needs it, then **publish** it. Nothing updates
    before that: `releases/latest/download/…` is served from published releases only, which is what
    makes the draft a safe place to look at a build first.
@@ -44,19 +47,32 @@ To build the archive locally exactly as CI does:
 ```bash
 cargo build --release -p sta -p sta-mcp
 node tools/package-release.mjs stage --target-dir target/release --out dist
-# dist/sta-<version>-windows-x64/ — run its sta.exe to check it starts, then zip it
+# dist/sta-<version>-<platform>/ — start its sta.exe (or sta.app) to check it runs, then zip it
+# (on macOS use `ditto -c -k --keepParent`, which keeps the bundle's file modes)
 ```
 
 ## 2. What the archive holds
 
-`tools/package-release.mjs` copies a fixed list (`PAYLOAD`): `sta.exe`, `sta-mcp.exe`, the CEF
-runtime (`libcef.dll`, the `.pak` files, `icudtl.dat`, `v8_context_snapshot.bin`, the GPU DLLs) and
-`locales/`. It **fails** when one of them is missing rather than publishing an archive that cannot
-start. `*.pdb`, `*.lib`, `*.d` and CMake leftovers are deliberately not in it. The UI (`ui/`) is
-embedded in the binary in release builds, so it is not a file in the archive.
+`tools/package-release.mjs` knows what each platform's archive holds (`PAYLOAD`), and **fails** when
+something is missing rather than publishing an archive that cannot start.
 
-There is no installer and no code signature: unpack it anywhere and run `sta.exe`. SmartScreen will
-warn once. Adding signing later is a step in the workflow, not a change to any of this.
+- **Windows**: a fixed list of files copied out of the target directory — `sta.exe`, `sta-mcp.exe`,
+  the CEF runtime (`libcef.dll`, the `.pak` files, `icudtl.dat`, `v8_context_snapshot.bin`, the GPU
+  DLLs) and `locales/`. `*.pdb`, `*.lib`, `*.d` and CMake leftovers are deliberately not in it.
+- **macOS**: nothing is copied file by file. The browser assembles its own bundle
+  (`sta --sta-bundle-mac=<staging dir>`, `crates/sta/src/platform/mac_bundle.rs`) — the same code
+  that makes `target/debug/sta.app` for `cargo run`, told to produce a standalone one: the CEF
+  framework copied in, and a real copy of the binary in each helper app instead of a hard link.
+  `sta-mcp` is then placed next to the browser in `Contents/MacOS`, which is where it looks for it.
+  The archive is made with `ditto`, the one macOS archiver that keeps file modes intact — without
+  the executable bit the unpacked binaries cannot start (`crates/sta/src/unzip.rs` restores it).
+
+The UI (`ui/`) is embedded in the binary in release builds, so it is not a file in either archive.
+
+There is no installer and no code signature: unpack it anywhere and run `sta.exe`, or open
+`sta.app`. SmartScreen warns once on Windows; on macOS, Gatekeeper refuses a double-click on an
+unsigned, quarantined app — open it from the right-click menu the first time. Adding signing (and
+notarization) later is a step in the workflow, not a change to any of this.
 
 ## 3. How a running sta updates itself
 
@@ -108,8 +124,12 @@ workflow, nothing else.
 
 ## 4. Platforms
 
-Windows x64 only, today: the shell is Win32 throughout (`docs/STATUS.md` "Windows only"). The rest
-of the pipeline is not — the manifest is keyed by platform (`windows-x86_64`, `darwin-aarch64`, …),
-`package-release.mjs` has a `PAYLOAD` table per platform, the updater picks its own key, and the
-workflow's matrix has the macOS job written out and commented. Porting the shell is what is
-missing; when it lands, a release covers both from the same tag.
+Windows x64 and macOS arm64, from the same tag: the workflow's matrix has a job for each, and every
+step after the build is shared. The manifest is keyed by platform (`windows-x86_64`,
+`darwin-aarch64`, …), `package-release.mjs` has a `PAYLOAD` entry per platform and the updater picks
+its own key (`sta_core::update::platform_key`).
+
+What a new platform needs: a `PAYLOAD` entry, a matrix row, and — for the update to *apply* — the
+answer to "what does an install look like", which `update.rs` asks through `install_dir` and
+`exe_in` (a directory of files on Windows, an app bundle on macOS). Linux has neither a shell half
+in `crates/sta/src/platform/` nor a payload yet.

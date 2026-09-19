@@ -12,6 +12,11 @@ while that build is explicitly armed.
 > serves it must never be a browser a person browses with. The four locks below are what makes that
 > true, and `test_cdp` is the single most dangerous tool in the repo.
 
+> **Windows only.** The suites drive real Win32 input (`SendInput`, posted mouse messages), take
+> window captures with PowerShell and assert on window styles and DWM attributes, and
+> `test_hooks/native.rs` is Win32 throughout. They are not part of a macOS build's verification:
+> there, `cargo test --workspace` and the checks in `tools/` are what run (`docs/STATUS.md` §5).
+
 ```
 node (a suite) ──stdio──► sta-mcp.exe ──\\.\pipe\sta-agent-<random>──► sta.exe
                                                                         ├ test_*  → test_hooks/   (armed debug build only, no policy)

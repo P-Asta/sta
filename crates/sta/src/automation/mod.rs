@@ -2,7 +2,7 @@
 //! docs/research/automation.md).
 //!
 //! ```text
-//! MCP client ─stdio─► sta-mcp.exe ─NDJSON over \\.\pipe\sta-agent-<random>─► pipe.rs (threads)
+//! MCP client ─stdio─► sta-mcp ─NDJSON over a pipe (Windows) / socket (Unix)─► pipe.rs (threads)
 //!                                                                                      └► session.rs (UI thread)
 //!                                                                                          ├ policy + approval (core)
 //!                                                                                          └ tools.rs ─► page.rs ─► cdp.rs (in-process DevTools, allowlist)
@@ -13,7 +13,9 @@
 //! calls, rate limits), `tools_input` / `tools_page` / `tools_browser` (the tools beyond the MVP set:
 //! hover, select_option, scroll, fill_form / page_find, evaluate, console_messages /
 //! request_tab_access, history_search, downloads_list), `console` (console messages of web tabs
-//! while access is on), `pipe` (named pipe server), `win` (SID/SDDL, CSPRNG, client identity),
+//! while access is on), `pipe` (the channel server: a named pipe in `pipe.rs` on Windows, a Unix
+//! domain socket in `socket.rs` elsewhere), `win` / `unix` (the OS half of the channel: CSPRNG,
+//! client identity, and on Windows the SID/SDDL the pipe is created with),
 //! `guards` (agent-controlled tabs in the shell's handlers), `endpoint` (endpoint file, agent.log),
 //! `ui` (the agent overlay, typing guard, taskbar flash, Settings' `agent.*` requests), `frame` (the
 //! agent-colored frame around agent-controlled tabs), `spike` (debug-only `debug.cdp`, `debug.tabKey`).
@@ -36,6 +38,13 @@ pub mod exec;
 pub mod frame;
 pub mod guards;
 pub mod page;
+/// The agent channel's transport. Both files serve the same module API (`endpoint_name`, `start`,
+/// `send`, `close`, `close_all`, `connection_count`, `PipeEvent`, `ClientIdentity`).
+#[cfg(windows)]
+#[path = "pipe.rs"]
+pub mod pipe;
+#[cfg(unix)]
+#[path = "socket.rs"]
 pub mod pipe;
 pub mod session;
 #[cfg(debug_assertions)]
@@ -45,7 +54,22 @@ pub mod tools_browser;
 pub mod tools_input;
 pub mod tools_page;
 pub mod ui;
+#[cfg(unix)]
+pub mod unix;
+#[cfg(windows)]
 pub mod win;
+
+/// `2n` hex digits from the OS CSPRNG (channel names, ref ids).
+pub fn random_hex(n: usize) -> Option<String> {
+    #[cfg(windows)]
+    {
+        win::random_hex(n)
+    }
+    #[cfg(unix)]
+    {
+        unix::random_hex(n)
+    }
+}
 
 use crate::browsers::{self, Role};
 use sta_core::Command;

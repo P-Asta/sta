@@ -31,7 +31,10 @@ use serde_json::{Value, json};
 use std::sync::{Mutex, OnceLock};
 
 /// Window classes of a Windows console: the classic conhost window, a pseudo console, and Windows
-/// Terminal's host window.
+/// Terminal's host window. (Only the Windows hook below looks at them — everything in this file
+/// that reads the desktop has an inert stand-in elsewhere, since there are no console windows to
+/// watch for.)
+#[cfg_attr(not(windows), allow(dead_code))]
 const CONSOLE_CLASSES: [&str; 3] = ["ConsoleWindowClass", "PseudoConsoleWindow", "CASCADIA_HOSTING_WINDOW_CLASS"];
 
 /// Window classes the *user* sees. `PseudoConsoleWindow` is the internal host window of a pseudo
@@ -268,6 +271,7 @@ mod sys {
 
     pub fn install() {}
     pub fn uninstall() {}
+    #[allow(dead_code)] // the Windows hook's entry point; nothing calls it here
     pub fn record(_hwnd: isize, _pid: u32, _class: String, _title: String) {}
     pub fn installed() -> bool {
         false
@@ -275,6 +279,7 @@ mod sys {
     pub fn current() -> Vec<Value> {
         Vec::new()
     }
+    #[allow(dead_code)] // only `chain_of` needs it, and only on Windows
     pub fn parent_map() -> Vec<(u32, u32)> {
         Vec::new()
     }
@@ -287,11 +292,14 @@ pub use sys::{current, install, installed, our_pid, parent_map, uninstall};
 
 /// `pid` and its ancestors, youngest first (at most 32 generations, so a cycle cannot hang us).
 /// Resolved from a live process snapshot, so it must be taken while the process still exists.
+/// Called from the Windows hook only.
+#[cfg_attr(not(windows), allow(dead_code))]
 pub fn chain_of(pid: u32) -> Vec<u32> {
     chain_in(&parent_map(), pid)
 }
 
 /// `chain_of` against a given pid → parent-pid table.
+#[cfg_attr(not(windows), allow(dead_code))]
 fn chain_in(parents: &[(u32, u32)], pid: u32) -> Vec<u32> {
     let mut chain = vec![pid];
     let mut current = pid;

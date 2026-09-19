@@ -95,7 +95,18 @@ use std::io::Write;
 use std::path::PathBuf;
 
 fn main() {
-    // 0) The apply helper: a staged build started to replace the installed one (update.rs). It
+    // 0a) macOS: nothing works outside an app bundle, and libcef is not linked into the binary —
+    // it is loaded from the framework inside that bundle (platform/mac_bundle.rs). Both come
+    // before every CEF call, in every process.
+    #[cfg(target_os = "macos")]
+    {
+        platform::mac_bundle::ensure_bundled();
+        if let Err(e) = platform::mac_bundle::load_framework() {
+            eprintln!("[sta] {e}");
+            std::process::exit(1);
+        }
+    }
+    // 0b) The apply helper: a staged build started to replace the installed one (update.rs). It
     // copies files and starts the new browser — no CEF, no profile, nothing else in this file.
     if update::apply_from_command_line() {
         return;
@@ -112,6 +123,10 @@ fn main() {
     }
 
     // 3) Browser process.
+    // `NSApp` has to be sta's own NSApplication subclass before `initialize`: CEF checks that it
+    // implements `CefAppProtocol` (platform/mac.rs). Subprocesses need no application object.
+    #[cfg(target_os = "macos")]
+    platform::init_application();
     if std::env::args().any(|a| a == "--console") {
         platform::attach_parent_console();
     }
@@ -159,7 +174,7 @@ fn main() {
     let settings = app::settings(dirs);
     if initialize(Some(args.as_main_args()), Some(&settings), Some(&mut app), std::ptr::null_mut()) != 1 {
         let rc = get_exit_code();
-        if rc == Resultcode::NORMAL_EXIT_PROCESS_NOTIFIED.get_raw() {
+        if rc == Resultcode::NORMAL_EXIT_PROCESS_NOTIFIED.get_raw() as i32 {
             log_info!("command line forwarded to the running instance");
             std::process::exit(0);
         }

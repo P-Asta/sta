@@ -19,15 +19,14 @@ impl Bridge {
         let dir = std::env::temp_dir().join(format!("sta-mcp-stdio-{tag}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
-        use std::os::windows::process::CommandExt;
-        let mut child = Command::new(env!("CARGO_BIN_EXE_sta-mcp"))
-            .args(["--data-dir", dir.to_str().unwrap(), "--no-launch"])
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::null())
-            .creation_flags(0x0800_0000) // CREATE_NO_WINDOW: `cargo test` must not flash a console
-            .spawn()
-            .expect("spawn sta-mcp");
+        let mut command = Command::new(env!("CARGO_BIN_EXE_sta-mcp"));
+        command.args(["--data-dir", dir.to_str().unwrap(), "--no-launch"]).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null());
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            command.creation_flags(0x0800_0000); // CREATE_NO_WINDOW: `cargo test` must not flash a console
+        }
+        let mut child = command.spawn().expect("spawn sta-mcp");
         let stdin = child.stdin.take().unwrap();
         let stdout: ChildStdout = child.stdout.take().unwrap();
         let (tx, rx) = mpsc::channel();

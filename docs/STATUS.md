@@ -4,10 +4,12 @@ What this browser does today, what it does not, how to build it and how to check
 read by someone deciding whether to use or work on it, so it is a list of facts rather than a pitch.
 Anything here that is not true is a bug; the e2e suites in §5 are what keeps most of it honest.
 
-- Platform: **Windows 11 only** (Windows 10 is untested).
+- Platform: **Windows 11** and **macOS 11+** (Windows 10 is untested; on macOS, see the list of
+  what is not ported in §4).
 - Engine: **Chromium 152** through the `cef` crate `=152.3.0`, **Alloy** style with CEF Views.
 - Language: Rust (two crates plus the MCP bridge) and plain HTML/CSS/JS for every surface.
-- Profile: `%LOCALAPPDATA%\sta` (release) or `%LOCALAPPDATA%\sta Dev` (debug), overridable with
+- Profile: `%LOCALAPPDATA%\sta` (release) or `%LOCALAPPDATA%\sta Dev` (debug) on Windows,
+  `~/Library/Application Support/sta` (or `sta Dev`) on macOS; overridable with
   `--sta-data-dir=<path>`.
 
 ---
@@ -154,13 +156,23 @@ focus, so it does nothing while the sidebar is hidden or floating.
 - **One window, one profile.** No second window, no profiles, no incognito.
 - **No split divider dragging** (fractions are equalised, or set by adding and removing panes).
 - **No favicon cache** for `http:` sites.
-- **Windows only.** `sta-core` and `ui/` are platform-neutral; the shell is Win32 throughout — and
-  so is everything under `crates/sta/src/platform/`, the named-pipe agent endpoint, the window
-  chrome, the hidden-window hooks and the registry work. A macOS build is therefore not a matrix
-  entry away: it is a port. The release pipeline and the updater are already keyed by platform and
-  wait for it (`docs/RELEASING.md` §4).
-- **No update for anything but Windows x64**, for the same reason; the update itself is a full
-  ~150 MB archive each time (no deltas).
+- **Windows and macOS; no Linux.** `sta-core` and `ui/` are platform-neutral, and
+  `crates/sta/src/platform/` has a Win32 half (`win.rs`, `hidden_windows.rs`) and a Cocoa half
+  (`mac.rs`, `mac_bundle.rs`). What is **not** ported to macOS:
+  - the windows Chromium opens for itself (extension popups, sign-in flows) are left as Chromium's
+    own windows — `hidden_windows.rs` and `foreign.rs` adopt or hide them through Win32 message
+    hooks, and macOS gets the inert stand-ins;
+  - the pointer-reveal keep-zone treats an owned popup over the sidebar as "still over sta" only
+    through the same Win32 plumbing;
+  - the end-to-end suites (§5) drive real Win32 input, so they do not run there;
+  - the extension id hash, clipboard, folder picker, shell integration and the agent channel all
+    have macOS implementations, so nothing else in the shell is stubbed.
+  Linux would be a third half of `platform/` plus a release target; nothing else in the tree assumes
+  Windows.
+- **Updates for Windows x64 and macOS arm64 only** (the platforms the release workflow builds); the
+  update itself is a full ~150 MB archive each time (no deltas). On macOS the archive holds
+  `sta.app` and the updater replaces the whole bundle; it is not code-signed, so Gatekeeper asks on
+  first open.
 
 ### Chrome extensions
 CEF's Alloy runtime — which sta's multi-view layout needs — gives an extension no Chrome window and
@@ -247,30 +259,40 @@ WAAPI animations are settled); the longest visible tail is about 320 ms.
 
 ## 3. Building
 
-Prerequisites: Rust stable (MSVC), Visual Studio 2022 C++ build tools, CMake and Ninja on `PATH`
-(`pip install --user cmake ninja`). Build from a short path — the CEF wrapper's CMake build fails
-with `C1083` under very long directories.
+Prerequisites (Windows): Rust stable (MSVC), Visual Studio 2022 C++ build tools, CMake and Ninja on
+`PATH` (`pip install --user cmake ninja`). Build from a short path — the CEF wrapper's CMake build
+fails with `C1083` under very long directories.
+
+Prerequisites (macOS 11+): Rust stable, the Xcode command line tools, CMake and Ninja on `PATH`
+(`brew install cmake ninja`) — the CEF C++ wrapper is compiled from source there.
 
 ```powershell
 cargo build --release          # or: cargo build
 ```
 
-The first build downloads CEF (~600 MB extracted) into `.cef/`; `cef-dll-sys` copies `libcef.dll`,
-the `.pak` files and `locales/` next to the executable. The Windows resources (icon, manifest,
-version info) need `rc.exe` from the Windows SDK. `crates/sta/res/make_icon.py` regenerates the app
-icon (Pillow required); commit `sta.ico`, the four `icon-*.png` and `preview-256.png` together —
-`node tools/check-icon.mjs` refuses anything else.
+The first build downloads CEF (~600 MB extracted) into `.cef/`; on Windows `cef-dll-sys` copies
+`libcef.dll`, the `.pak` files and `locales/` next to the executable. The Windows resources (icon,
+manifest, version info) need `rc.exe` from the Windows SDK. `crates/sta/res/make_icon.py`
+regenerates the app icon (Pillow required); commit `sta.ico`, the four `icon-*.png` and
+`preview-256.png` together — `node tools/check-icon.mjs` refuses anything else.
 
-Release binaries: `target/release/sta.exe` and `target/release/sta-mcp.exe`. What a release ships
-(and what CI zips) is `node tools/package-release.mjs stage` — the two binaries, the CEF runtime and
-`locales/`, ~430 MB unpacked (`docs/RELEASING.md`).
+On macOS nothing is copied next to the executable: libcef is a framework loaded at runtime from
+inside an app bundle. A debug build assembles `target/debug/sta.app` around itself and re-executes
+into it, so `./target/debug/sta` (and `cargo run`) just works;
+`target/release/sta --sta-bundle-mac[=<dir>]` writes a standalone bundle and exits.
+
+Release binaries: `target/release/sta.exe` and `target/release/sta-mcp.exe` (`sta` and `sta-mcp` on
+macOS). What a release ships (and what CI zips) is `node tools/package-release.mjs stage` — the two
+binaries with the CEF runtime, ~430 MB unpacked, or `sta.app` with the framework, the helper apps
+and the bridge inside it (`docs/RELEASING.md`).
 
 ---
 
 ## 4. Running the MCP server
 
 Register `target/release/sta-mcp.exe` with an MCP client. It talks to a running sta over a named
-pipe in the profile folder and, unless `--no-launch` is passed, starts sta if none is running.
+pipe (a Unix domain socket in the profile folder on macOS) and, unless `--no-launch` is passed,
+starts sta if none is running.
 `--data-dir <path>` picks a profile. Agent access is off until the user turns it on in
 Settings › AI agents; every new client, every new site and every request for a tab is approved in
 the sta window. See `docs/MCP.md`.
@@ -300,6 +322,8 @@ The end-to-end suites drive a real browser **through MCP** — the same transpor
 so they need a build with the debug-only test surface (35 `test_*` tools, `docs/TESTING.md`). It
 exists only with `--features test-hooks`, only in a debug build, only while armed by
 `--sta-test-hooks` + `STA_E2E=1`, and only with an explicit non-default data directory.
+**They are Windows-only**: they send real Win32 input, capture windows with PowerShell and assert on
+window styles. On macOS the `cargo` and `node tools/…` checks above are the verification.
 
 ```powershell
 cargo build -p sta -p sta-mcp --features test-hooks

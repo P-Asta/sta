@@ -11,12 +11,12 @@
 //!   `agent.info`):
 //!   - `agent.info` → `{bridgePath, bridgeFound, dataDir, dataDirIsDefault, endpointOpen, logPath, build}`;
 //!   - `agent.testConnection` → `{ok, steps: [{id, ok, detail}]}`: access on, endpoint open, bridge
-//!     found, and `sta-mcp.exe --check` (reads the endpoint file, opens the pipe with the
+//!     found, and `sta-mcp --check` (reads the endpoint file, opens the channel with the
 //!     owner and session checks, closes it without a hello: no prompt). One test at a time (409).
 
 use super::{endpoint, session};
 use crate::ipc::Reply;
-use crate::{controller, overlays, paths, task, window};
+use crate::{controller, overlays, paths, task};
 use sta_core::{AgentAccess, Id};
 use cef::wrapper::message_router::BrowserSideCallback;
 use serde_json::{Value, json};
@@ -119,7 +119,7 @@ pub fn hide_overlay() {
 #[cfg(windows)]
 fn flash_taskbar() {
     use windows_sys::Win32::UI::WindowsAndMessaging::{FLASHW_TIMERNOFG, FLASHW_TRAY, FLASHWINFO, FlashWindowEx, GetForegroundWindow};
-    let hwnd = window::hwnd_value();
+    let hwnd = crate::window::hwnd_value();
     if hwnd == 0 {
         return;
     }
@@ -134,7 +134,15 @@ fn flash_taskbar() {
     FLASHES.set(FLASHES.get() + 1);
 }
 
-#[cfg(not(windows))]
+/// Bounces the Dock icon until the user comes back to sta.
+#[cfg(target_os = "macos")]
+fn flash_taskbar() {
+    if crate::platform::request_attention() {
+        FLASHES.set(FLASHES.get() + 1);
+    }
+}
+
+#[cfg(not(any(windows, target_os = "macos")))]
 fn flash_taskbar() {}
 
 // ----------------------------------------------------------------------------------- IPC
@@ -160,24 +168,39 @@ pub fn handle_request(browser_id: i32, cmd: &str, _payload: Value, callback: &Cb
     }
 }
 
+/// The bridge's file name next to the browser (`Contents/MacOS/sta-mcp` inside the app bundle on
+/// macOS, where `current_exe` is the browser in the same directory).
+pub const BRIDGE_EXE: &str = if cfg!(windows) { "sta-mcp.exe" } else { "sta-mcp" };
+
 fn bridge_path() -> Option<PathBuf> {
-    std::env::current_exe().ok().and_then(|p| p.parent().map(|d| d.join("sta-mcp.exe")))
+    std::env::current_exe().ok().and_then(|p| p.parent().map(|d| d.join(BRIDGE_EXE)))
 }
 
-/// The data directory the bridge uses without `--data-dir` (same rule as `sta-mcp`).
+/// The data directory the bridge uses without `--data-dir` (same rule as `sta-mcp`, and as
+/// `paths::default_root`).
 fn bridge_default_data_dir() -> Option<PathBuf> {
-    let local = std::env::var_os("LOCALAPPDATA")?;
-    Some(PathBuf::from(local).join(if cfg!(debug_assertions) { "sta Dev" } else { "sta" }))
+    #[cfg(windows)]
+    let root = PathBuf::from(std::env::var_os("LOCALAPPDATA")?);
+    #[cfg(not(windows))]
+    let root = PathBuf::from(std::env::var_os("HOME")?).join("Library/Application Support");
+    Some(root.join(if cfg!(debug_assertions) { "sta Dev" } else { "sta" }))
 }
 
 fn same_path(a: &std::path::Path, b: &std::path::Path) -> bool {
-    let norm = |p: &std::path::Path| p.to_string_lossy().trim_end_matches(['\\', '/']).replace('/', "\\").to_lowercase();
+    let norm = |p: &std::path::Path| {
+        let text = p.to_string_lossy();
+        if cfg!(windows) { text.trim_end_matches(['\\', '/']).replace('/', "\\").to_lowercase() } else { text.trim_end_matches('/').to_string() }
+    };
     norm(a) == norm(b)
 }
 
 /// The legacy default data folder (from before the rename) that sta may run in place when it
-/// couldn't move it; the bridge's default data directory finds that run too.
+/// couldn't move it; the bridge's default data directory finds that run too. Windows only: sta has
+/// never had another name anywhere else.
 fn legacy_default_data_dir() -> Option<PathBuf> {
+    if !cfg!(windows) {
+        return None;
+    }
     let local = std::env::var_os("LOCALAPPDATA")?;
     Some(PathBuf::from(local).join(sta_core::legacy::data_dir_name(cfg!(debug_assertions))))
 }
@@ -221,14 +244,14 @@ fn test_connection(cb: Cb) {
     }];
     let open = session::endpoint_open();
     steps.push(if open {
-        step("endpoint", true, "sta is listening for agents on a private pipe")
+        step("endpoint", true, if cfg!(windows) { "sta is listening for agents on a private pipe" } else { "sta is listening for agents on a private socket" })
     } else {
         step("endpoint", false, "sta isn't listening for agents (turn access on)")
     });
     let bridge = bridge_path().filter(|p| p.is_file());
     steps.push(match &bridge {
         Some(p) => step("bridge", true, p.to_string_lossy()),
-        None => step("bridge", false, "sta-mcp.exe was not found next to sta.exe"),
+        None => step("bridge", false, format!("{BRIDGE_EXE} was not found next to sta")),
     });
     let (Some(bridge), true, Some(data_dir)) = (bridge, open, paths::try_dirs().map(|d| d.base.clone())) else {
         finish_test(&cb, steps, started);
@@ -257,7 +280,7 @@ fn finish_test(cb: &Cb, steps: Vec<Value>, started: Instant) {
     reply(cb, json!({ "ok": ok, "steps": steps, "ms": started.elapsed().as_millis() as u64 }));
 }
 
-/// Runs `sta-mcp.exe --check --data-dir <dir>` (no console window, 10 s at most) and reads its
+/// Runs `sta-mcp --check --data-dir <dir>` (no console window, 10 s at most) and reads its
 /// one-line JSON answer.
 fn run_check(bridge: &std::path::Path, data_dir: &std::path::Path) -> Result<String, String> {
     use std::io::Read;
@@ -270,7 +293,7 @@ fn run_check(bridge: &std::path::Path, data_dir: &std::path::Path) -> Result<Str
         const CREATE_NO_WINDOW: u32 = 0x0800_0000;
         command.creation_flags(CREATE_NO_WINDOW);
     }
-    let mut child = command.spawn().map_err(|e| format!("Couldn't start sta-mcp.exe ({e})"))?;
+    let mut child = command.spawn().map_err(|e| format!("Couldn't start {BRIDGE_EXE} ({e})"))?;
     let started = Instant::now();
     let status = loop {
         match child.try_wait() {
@@ -279,9 +302,9 @@ fn run_check(bridge: &std::path::Path, data_dir: &std::path::Path) -> Result<Str
             Ok(None) => {
                 let _ = child.kill();
                 let _ = child.wait();
-                return Err("sta-mcp.exe didn't answer within 10 s".into());
+                return Err(format!("{BRIDGE_EXE} didn't answer within 10 s"));
             }
-            Err(e) => return Err(format!("sta-mcp.exe failed ({e})")),
+            Err(e) => return Err(format!("{BRIDGE_EXE} failed ({e})")),
         }
     };
     let mut out = String::new();

@@ -6,7 +6,7 @@ import { h, html, render, useLayoutEffect, useRef } from '/common/vendor/htm-pre
 import { dispatch, startSurface } from '/common/ipc.js';
 import { IconButton } from '/common/components.js';
 import { NavButtons, UrlPill } from '/common/chrome.js';
-import { classNames } from '/common/util.js';
+import { classNames, shortcut } from '/common/util.js';
 import * as motion from '/common/motion.js';
 import { AgentChip } from './agent-chip.js';
 
@@ -81,7 +81,7 @@ function Topbar({ state }) {
   return html`<div ref=${rootRef} class=${classNames('topbar drag', !sidebarVisible && 'is-sidebar-hidden', !focused && 'is-inactive')}>
     <div class="tb-left">
       ${!sidebarVisible &&
-      html`<${IconButton} icon="sidebar" label="Show sidebar" title="Show sidebar (Ctrl+S)" onClick=${() => fire({ type: 'toggleSidebar' })} />
+      html`<${IconButton} icon="sidebar" label="Show sidebar" title=${`Show sidebar (${shortcut('Ctrl+S')})`} onClick=${() => fire({ type: 'toggleSidebar' })} />
         <${NavButtons} current=${current} />`}
     </div>
     <div class="tb-center">${!sidebarVisible && html`<${UrlPill} current=${current} compact />`}</div>
@@ -91,7 +91,7 @@ function Topbar({ state }) {
         class="tb-split"
         icon="split"
         label="Add split view"
-        title=${(current?.splitPanes ?? 0) >= 4 ? 'Split view is full (4 panes)' : 'Split view (Ctrl+Shift+=)'}
+        title=${(current?.splitPanes ?? 0) >= 4 ? 'Split view is full (4 panes)' : `Split view (${shortcut('Ctrl+Shift+=')})`}
         disabled=${!current || (current.splitPanes ?? 0) >= 4}
         onClick=${() => fire({ type: 'openCommandBar', mode: 'split' })}
       />

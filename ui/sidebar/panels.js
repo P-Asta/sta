@@ -6,7 +6,7 @@ import { html, useEffect, useLayoutEffect, useMemo, useRef, useState } from '/co
 import { invoke } from '/common/ipc.js';
 import { Icon } from '/common/icons.js';
 import { Button, EmojiPicker, IconButton, Menu, Popover, ProgressBar, TextField } from '/common/components.js';
-import { classNames, describeDownload, downloadFraction, formatBytes, formatDuration, hashString } from '/common/util.js';
+import { classNames, describeDownload, downloadFraction, formatBytes, formatDuration, hashString, shortcut } from '/common/util.js';
 import * as motion from '/common/motion.js';
 import { fire, useExitGhost } from './lib.js';
 
@@ -139,7 +139,7 @@ function cardStatus(d) {
 /** Compact card above the bottom bar for the newest in-progress download (arc_spec §2.20). */
 export function DownloadCard({ download: d, onOpen }) {
   return html`<div class="dl-card" role="group" aria-label=${`Downloading ${d.fileName}`}>
-    <button type="button" class="dl-card-main" title="Show downloads (Ctrl+J)" onClick=${onOpen}>
+    <button type="button" class="dl-card-main" title=${`Show downloads (${shortcut('Ctrl+J')})`} onClick=${onOpen}>
       <${FileTile} name=${d.fileName} />
       <span class="dl-text">
         <span class="dl-name">${d.fileName}</span>

@@ -19,7 +19,7 @@ import { Icon } from '/common/icons.js';
 import { IconButton, Menu, ProgressRing, dismissFloatingLayers } from '/common/components.js';
 import { NavButtons, UrlPill } from '/common/chrome.js';
 import { themeStyle } from '/common/theme.js';
-import { activeSpace, classNames } from '/common/util.js';
+import { activeSpace, classNames, shortcut } from '/common/util.js';
 import { sb } from './controller.js';
 import { installDragAndDrop } from './dnd.js';
 import { listMenuItems, spaceMenuItems } from './menus.js';
@@ -445,7 +445,7 @@ function BottomBar({ state, downloadsButton, downloadsOpen, onDownloads }) {
       type="button"
       class=${classNames('icon-btn bb-downloads', progress !== undefined && 'is-busy', justDone && 'is-done')}
       aria-label="Downloads"
-      title="Downloads (Ctrl+J)"
+      title=${`Downloads (${shortcut('Ctrl+J')})`}
       aria-expanded=${String(downloadsOpen)}
       onClick=${onDownloads}
     >
@@ -1075,7 +1075,7 @@ function Sidebar({ state }) {
       <${IconButton}
         icon="sidebar"
         label=${floating ? 'Keep sidebar open' : 'Hide sidebar'}
-        title=${floating ? 'Keep sidebar open (Ctrl+S)' : 'Hide sidebar (Ctrl+S)'}
+        title=${`${floating ? 'Keep sidebar open' : 'Hide sidebar'} (${shortcut('Ctrl+S')})`}
         onClick=${() => fire({ type: 'toggleSidebar' })}
       />
       <${NavButtons} current=${state.current} />

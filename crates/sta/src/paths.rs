@@ -4,7 +4,8 @@
 //! process, right after `execute_process` returned -1 (never in subprocesses).
 //!
 //! ```text
-//! <base>/                 %LOCALAPPDATA%\sta (release) | %LOCALAPPDATA%\sta Dev (debug)
+//! <base>/                 <root>/sta (release) | <root>/sta Dev (debug), where <root> is
+//!                         %LOCALAPPDATA% on Windows and ~/Library/Application Support on macOS
 //!   User Data/            Settings.root_cache_path == cache_path (Chromium profile, singleton lock)
 //!   Logs/                 cef.log, sta.log, panic.log
 //!   sta/                  state.json, history.json (sta's own profile data)
@@ -14,7 +15,9 @@
 //! it so they never touch the user's profile or collide with the process singleton.
 //!
 //! Folders from before the rename (`sta_core::legacy`, docs/ARCHITECTURE.md §3) are migrated
-//! before anything uses the directories:
+//! before anything uses the directories. Only Windows ever had them — sta has never shipped
+//! anywhere else under the old name — so on other platforms there is nothing to migrate and the
+//! rules below do not apply:
 //! - for the default folder, a legacy default folder is moved to the new default name when the new
 //!   one doesn't exist yet (a rename in `%LOCALAPPDATA%`, so nothing is copied). An existing new
 //!   folder is never merged with a legacy one; the legacy folder then stays untouched. An override
@@ -62,7 +65,7 @@ static IN_PLACE_LOCK: OnceLock<std::fs::File> = OnceLock::new();
 pub const DATA_DIR_SWITCH: &str = "--sta-data-dir=";
 /// Environment variable that overrides the data directory.
 pub const DATA_DIR_ENV: &str = "STA_DATA_DIR";
-/// Default data folder under `%LOCALAPPDATA%`.
+/// Default data folder under the platform's application-data root ([`default_root`]).
 pub const DEFAULT_DIR_RELEASE: &str = "sta";
 pub const DEFAULT_DIR_DEBUG: &str = "sta Dev";
 /// Profile subfolder of `<base>`.
@@ -114,8 +117,7 @@ pub fn resolve() -> Result<(AppDirs, Vec<Note>), ResolveError> {
         a.to_str()?.strip_prefix(DATA_DIR_SWITCH).filter(|s| !s.is_empty()).map(PathBuf::from)
     });
     let from_env = || std::env::var_os(DATA_DIR_ENV).filter(|v| !v.is_empty()).map(PathBuf::from);
-    let local_app_data = std::env::var_os("LOCALAPPDATA").filter(|v| !v.is_empty()).map(PathBuf::from);
-    let (dirs, notes) = resolve_with(from_arg.or_else(from_env), local_app_data, cfg!(debug_assertions))?;
+    let (dirs, notes) = resolve_with(from_arg.or_else(from_env), default_root(), cfg!(debug_assertions))?;
     for note in &notes {
         if let Note::UsingLegacyInPlace { path, .. } = note {
             // Fails only when a concurrent sta that uses the folder in place holds it already.
@@ -127,13 +129,29 @@ pub fn resolve() -> Result<(AppDirs, Vec<Note>), ResolveError> {
     Ok((dirs, notes))
 }
 
-/// [`resolve`] without the process environment: `explicit` data dir override, `%LOCALAPPDATA%`,
-/// build flavor.
-fn resolve_with(explicit: Option<PathBuf>, local_app_data: Option<PathBuf>, debug: bool) -> Result<(AppDirs, Vec<Note>), ResolveError> {
+/// Where per-user application data goes on this platform: `%LOCALAPPDATA%` on Windows,
+/// `~/Library/Application Support` on macOS. `None` when the environment doesn't say.
+fn default_root() -> Option<PathBuf> {
+    #[cfg(windows)]
+    {
+        std::env::var_os("LOCALAPPDATA").filter(|v| !v.is_empty()).map(PathBuf::from)
+    }
+    #[cfg(not(windows))]
+    {
+        std::env::var_os("HOME").filter(|v| !v.is_empty()).map(|home| PathBuf::from(home).join("Library/Application Support"))
+    }
+}
+
+/// [`resolve`] without the process environment: `explicit` data dir override, the application-data
+/// root, build flavor.
+fn resolve_with(explicit: Option<PathBuf>, default_root: Option<PathBuf>, debug: bool) -> Result<(AppDirs, Vec<Note>), ResolveError> {
     let mut notes = Vec::new();
-    let default = local_app_data.map(|local| {
-        let new = local.join(if debug { DEFAULT_DIR_DEBUG } else { DEFAULT_DIR_RELEASE });
-        (new, local.join(legacy::data_dir_name(debug)))
+    let default = default_root.map(|root| {
+        let new = root.join(if debug { DEFAULT_DIR_DEBUG } else { DEFAULT_DIR_RELEASE });
+        // A folder from before the rename exists on Windows only; naming the new folder as its own
+        // legacy counterpart makes `migrate` a no-op everywhere else.
+        let legacy = if cfg!(windows) { root.join(legacy::data_dir_name(debug)) } else { new.clone() };
+        (new, legacy)
     });
     // root_cache_path must be absolute.
     let explicit = explicit.map(std::path::absolute).transpose()?;
@@ -143,7 +161,7 @@ fn resolve_with(explicit: Option<PathBuf>, local_app_data: Option<PathBuf>, debu
         (Some(dir), Some((new, old))) if same_folder(&dir, &new) => migrate(&new, &old, &old.join(USER_DATA_DIR), &mut notes)?,
         (Some(dir), _) => dir,
         (None, Some((new, old))) => migrate(&new, &old, &old.join(USER_DATA_DIR), &mut notes)?,
-        (None, None) => return Err(io::Error::other("LOCALAPPDATA is not set").into()),
+        (None, None) => return Err(io::Error::other(if cfg!(windows) { "LOCALAPPDATA is not set" } else { "HOME is not set" }).into()),
     };
     let (new_profile, old_profile) = (base.join(PROFILE_DIR), base.join(legacy::PROFILE_DIR));
     let profile = if matches!(notes.last(), Some(Note::UsingLegacyInPlace { .. } | Note::SharingLegacyInPlace { .. })) {
@@ -162,12 +180,13 @@ fn resolve_with(explicit: Option<PathBuf>, local_app_data: Option<PathBuf>, debu
     Ok((dirs, notes))
 }
 
-/// The same folder on Windows' case-insensitive file systems (separator style and trailing
-/// separators ignored).
+/// The same folder: separator style and trailing separators are ignored, and on Windows (whose
+/// file systems are case-insensitive) so is case.
 fn same_folder(a: &Path, b: &Path) -> bool {
     let normalized = |p: &Path| {
         let p = std::path::absolute(p).unwrap_or_else(|_| p.to_path_buf());
-        p.to_string_lossy().replace('/', "\\").trim_end_matches('\\').to_lowercase()
+        let text = p.to_string_lossy();
+        if cfg!(windows) { text.replace('/', "\\").trim_end_matches('\\').to_lowercase() } else { text.trim_end_matches('/').to_string() }
     };
     normalized(a) == normalized(b)
 }
@@ -401,6 +420,8 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
     }
 
+    /// The legacy folder, and the case-insensitive spelling of a path, are both Windows rules.
+    #[cfg(windows)]
     #[test]
     fn an_override_that_names_the_default_folder_migrates_like_the_default() {
         let root = temp("override");
@@ -432,6 +453,32 @@ mod tests {
         );
         // Same result without an override; LOCALAPPDATA is needed only then.
         let (dirs, notes) = resolve_with(None, Some(local.clone()), true).unwrap();
+        assert_eq!((dirs.base, notes), (new_base, vec![]));
+        assert!(matches!(resolve_with(None, None, true), Err(ResolveError::Io(_))));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn an_override_that_names_the_default_folder_resolves_to_it() {
+        let root = temp("override");
+        let app_support = root.join("Application Support");
+        let new_base = app_support.join(DEFAULT_DIR_DEBUG);
+
+        // Another override is used as given.
+        let other = root.join("other");
+        let (dirs, notes) = resolve_with(Some(other.clone()), Some(app_support.clone()), true).unwrap();
+        assert_eq!((dirs.base, notes), (other, vec![]));
+
+        // The default folder, spelled with a trailing separator. Nothing is ever migrated here.
+        let spelled = format!("{}/{}/", app_support.display(), DEFAULT_DIR_DEBUG);
+        let (dirs, notes) = resolve_with(Some(PathBuf::from(spelled)), Some(app_support.clone()), true).unwrap();
+        assert_eq!((dirs.base.clone(), notes), (new_base.clone(), vec![]));
+        assert_eq!(dirs.profile, new_base.join(PROFILE_DIR));
+        assert!(dirs.user_data.is_dir() && dirs.logs.is_dir() && dirs.profile.is_dir());
+
+        // Same result without an override; the application-data root is needed only then.
+        let (dirs, notes) = resolve_with(None, Some(app_support), true).unwrap();
         assert_eq!((dirs.base, notes), (new_base, vec![]));
         assert!(matches!(resolve_with(None, None, true), Err(ResolveError::Io(_))));
         let _ = std::fs::remove_dir_all(&root);

@@ -1,6 +1,11 @@
-//! The bridge side of the agent channel (docs/MCP.md "Channel"): reads the endpoint file, opens
-//! the pipe after the owner, session, integrity and server-process checks, says hello, waits for
-//! approval, forwards calls and cancellations, and launches sta when it isn't running.
+//! The bridge side of the agent channel (docs/MCP.md "Channel"): reads the endpoint file, opens the
+//! channel after checking who serves it, says hello, waits for approval, forwards calls and
+//! cancellations, and launches sta when it isn't running.
+//!
+//! The transport is the platform's ([`Transport`]): a named pipe on Windows, a Unix domain socket
+//! elsewhere. Everything below it is the same, including the rule that the browser on the other end
+//! must be the process the endpoint file names — checked through the OS (`win.rs` / `unix.rs`),
+//! never through anything the peer sends.
 
 use sta_core::agent::ErrorCode;
 use sta_core::legacy;
@@ -20,6 +25,13 @@ use tokio::sync::{Mutex, oneshot, watch};
 #[cfg(windows)]
 use tokio::net::windows::named_pipe::{ClientOptions, NamedPipeClient};
 
+/// What the channel runs on: one end of the browser's named pipe (Windows) or of its Unix domain
+/// socket (macOS, Linux).
+#[cfg(windows)]
+type Transport = NamedPipeClient;
+#[cfg(unix)]
+type Transport = tokio::net::UnixStream;
+
 /// How long a launched browser gets to write its endpoint file.
 const LAUNCH_WAIT: Duration = Duration::from_secs(25);
 
@@ -35,8 +47,7 @@ enum Approval {
 }
 
 struct Conn {
-    #[cfg(windows)]
-    writer: Mutex<WriteHalf<NamedPipeClient>>,
+    writer: Mutex<WriteHalf<Transport>>,
     pending: StdMutex<HashMap<u64, oneshot::Sender<BrowserMessage>>>,
     approval: watch::Sender<Approval>,
     closed: AtomicBool,
@@ -105,11 +116,7 @@ impl Channel {
     }
 
     fn read_endpoint(&self) -> Option<Endpoint> {
-        #[cfg(windows)]
-        let alive = crate::win::process_alive;
-        #[cfg(not(windows))]
-        let alive = |_: u32| true;
-        read_endpoint_from(&self.endpoint_paths(), alive)
+        read_endpoint_from(&self.endpoint_paths(), process_alive)
     }
 
     /// Runs one tool call in the browser. `cancel` resolves when the MCP client cancels it.
@@ -247,12 +254,6 @@ impl Channel {
         Ok(conn)
     }
 
-    #[cfg(not(windows))]
-    async fn open(&self) -> Result<Arc<Conn>, ToolError> {
-        Err(not_running("The sta agent channel is only available on Windows"))
-    }
-
-    #[cfg(windows)]
     async fn open(&self) -> Result<Arc<Conn>, ToolError> {
         let mut launched = false;
         loop {
@@ -273,7 +274,7 @@ impl Channel {
                 return Err(err(ErrorCode::EndpointUntrusted, "The endpoint file names an unexpected pipe"));
             }
             // An endpoint left behind by a browser that is gone (crash, killed).
-            if !crate::win::process_alive(endpoint.pid) {
+            if !process_alive(endpoint.pid) {
                 if self.launch && !launched {
                     self.launch_browser(Some(endpoint.pipe.clone())).await?;
                     launched = true;
@@ -281,7 +282,7 @@ impl Channel {
                 }
                 return Err(not_running("sta isn't running"));
             }
-            match open_pipe(&endpoint.pipe).await {
+            match connect(&endpoint.pipe).await {
                 Ok(pipe) => return self.start(pipe, endpoint.pid).await,
                 Err(e) if e.kind() == std::io::ErrorKind::NotFound && self.launch && !launched => {
                     // A stale endpoint (the browser exited without removing it).
@@ -294,12 +295,10 @@ impl Channel {
         }
     }
 
-    /// `--check` (Settings → Test connection): the endpoint file, the pipe and its owner, session,
-    /// integrity and server-process checks, exactly as a tool call would reach them, then disconnects without a `hello` (so no
-    /// approval prompt). Never launches sta. `Ok` = a readable description.
-    #[cfg(windows)]
+    /// `--check` (Settings → Test connection): the endpoint file and every check a tool call
+    /// makes on the channel it opens, then disconnects without a `hello` (so no approval prompt).
+    /// Never launches sta. `Ok` = a readable description.
     pub async fn check(&self) -> Result<String, ToolError> {
-        use std::os::windows::io::AsRawHandle;
         let Some(endpoint) = self.read_endpoint() else {
             return Err(not_running("sta isn't running, or AI agent access is off"));
         };
@@ -309,24 +308,17 @@ impl Channel {
         if !endpoint.pipe_is_valid() {
             return Err(err(ErrorCode::EndpointUntrusted, "The endpoint file names an unexpected pipe"));
         }
-        if !crate::win::process_alive(endpoint.pid) {
+        if !process_alive(endpoint.pid) {
             return Err(not_running("sta isn't running (stale endpoint file)"));
         }
-        let pipe = open_pipe(&endpoint.pipe).await.map_err(|e| not_running(format!("Can't open the sta agent channel ({e})")))?;
-        verify_pipe(pipe.as_raw_handle(), endpoint.pid)?;
+        let pipe = connect(&endpoint.pipe).await.map_err(|e| not_running(format!("Can't open the sta agent channel ({e})")))?;
+        verify_peer(&pipe, endpoint.pid)?;
         drop(pipe);
-        Ok(format!("The MCP server reached sta (pid {}) and verified its pipe", endpoint.pid))
+        Ok(format!("The MCP server reached sta (pid {}) and verified its channel", endpoint.pid))
     }
 
-    #[cfg(not(windows))]
-    pub async fn check(&self) -> Result<String, ToolError> {
-        Err(not_running("The sta agent channel is only available on Windows"))
-    }
-
-    #[cfg(windows)]
-    async fn start(&self, pipe: NamedPipeClient, endpoint_pid: u32) -> Result<Arc<Conn>, ToolError> {
-        use std::os::windows::io::AsRawHandle;
-        verify_pipe(pipe.as_raw_handle(), endpoint_pid)?;
+    async fn start(&self, pipe: Transport, endpoint_pid: u32) -> Result<Arc<Conn>, ToolError> {
+        verify_peer(&pipe, endpoint_pid)?;
         let (reader, writer) = tokio::io::split(pipe);
         let (approval, _) = watch::channel(Approval::Waiting);
         let conn = Arc::new(Conn { writer: Mutex::new(writer), pending: StdMutex::new(HashMap::new()), approval, closed: AtomicBool::new(false) });
@@ -342,16 +334,16 @@ impl Channel {
         Ok(conn)
     }
 
-    #[cfg(windows)]
     async fn launch_browser(&self, stale_pipe: Option<String>) -> Result<(), ToolError> {
+        #[cfg(windows)]
         if crate::win::has_package_identity() {
             return Err(not_running("sta isn't running").with_hint("Open sta yourself: this client runs packaged and can't start it."));
         }
-        let exe = std::env::current_exe().ok().and_then(|p| p.parent().map(|d| d.join("sta.exe"))).filter(|p| p.is_file());
+        let exe = std::env::current_exe().ok().and_then(|p| p.parent().map(|d| d.join(BROWSER_EXE))).filter(|p| p.is_file());
         let Some(exe) = exe else {
-            return Err(not_running("sta isn't running (sta.exe was not found next to sta-mcp.exe)"));
+            return Err(not_running(format!("sta isn't running ({BROWSER_EXE} was not found next to this bridge)")));
         };
-        let pid = crate::win::launch(&exe, &self.data_dir).map_err(|e| not_running(e).with_hint("Ask the user to open sta."))?;
+        let pid = launch(&exe, &self.data_dir).map_err(|e| not_running(e).with_hint("Ask the user to open sta."))?;
         eprintln!("[sta-mcp] started sta (pid {pid})");
         let started = std::time::Instant::now();
         while started.elapsed() < LAUNCH_WAIT {
@@ -385,6 +377,68 @@ fn refused_error(code: RefusedCode, message: &str) -> ToolError {
     }
 }
 
+/// The browser executable next to the bridge, which `--no-launch` aside it may start.
+#[cfg(windows)]
+const BROWSER_EXE: &str = "sta.exe";
+#[cfg(unix)]
+const BROWSER_EXE: &str = "sta";
+
+fn process_alive(pid: u32) -> bool {
+    #[cfg(windows)]
+    {
+        crate::win::process_alive(pid)
+    }
+    #[cfg(unix)]
+    {
+        crate::unix::process_alive(pid)
+    }
+}
+
+fn launch(exe: &std::path::Path, data_dir: &Path) -> Result<u32, String> {
+    #[cfg(windows)]
+    {
+        crate::win::launch(exe, data_dir)
+    }
+    #[cfg(unix)]
+    {
+        crate::unix::launch(exe, data_dir)
+    }
+}
+
+/// The checks before the bridge writes anything to an opened channel.
+fn verify_peer(pipe: &Transport, endpoint_pid: u32) -> Result<(), ToolError> {
+    #[cfg(windows)]
+    {
+        use std::os::windows::io::AsRawHandle;
+        verify_pipe(pipe.as_raw_handle(), endpoint_pid)
+    }
+    #[cfg(unix)]
+    {
+        verify_socket(pipe, endpoint_pid)
+    }
+}
+
+/// Unix: the socket must be served by the process the endpoint file names, running as this user.
+/// The directory it sits in is the user's own and the socket is mode 0600, so this is about *which*
+/// of the user's processes answered, not about other users.
+#[cfg(unix)]
+fn verify_socket(socket: &Transport, endpoint_pid: u32) -> Result<(), ToolError> {
+    use std::os::fd::AsRawFd;
+    let hint = "Another program may have taken the socket path; ask the user to restart sta.";
+    let fd = socket.as_raw_fd();
+    if crate::unix::peer_uid(fd) != Some(crate::unix::current_uid()) {
+        return Err(err(ErrorCode::EndpointUntrusted, "The sta agent socket isn't served by you").with_hint(hint));
+    }
+    match crate::unix::peer_pid(fd) {
+        Some(pid) if pid == endpoint_pid => Ok(()),
+        other => Err(err(
+            ErrorCode::EndpointUntrusted,
+            format!("The sta agent socket is served by another process (pid {}, not {endpoint_pid})", other.map_or("unknown".to_string(), |p| p.to_string())),
+        )
+        .with_hint(hint)),
+    }
+}
+
 /// The checks before the bridge writes anything to an opened pipe: owned by this user, served
 /// from this logon session, labelled at medium integrity or above (a low-integrity or sandboxed
 /// process can't have created it), and served by the process the endpoint file names.
@@ -404,8 +458,9 @@ fn verify_pipe(raw: std::os::windows::io::RawHandle, endpoint_pid: u32) -> Resul
     }
 }
 
+/// Opens the browser's channel: the pipe by name, or the socket by path.
 #[cfg(windows)]
-async fn open_pipe(name: &str) -> std::io::Result<NamedPipeClient> {
+async fn connect(name: &str) -> std::io::Result<Transport> {
     const ERROR_PIPE_BUSY: i32 = 231;
     let started = std::time::Instant::now();
     loop {
@@ -419,20 +474,18 @@ async fn open_pipe(name: &str) -> std::io::Result<NamedPipeClient> {
     }
 }
 
-#[cfg(windows)]
+#[cfg(unix)]
+async fn connect(path: &str) -> std::io::Result<Transport> {
+    tokio::net::UnixStream::connect(path).await
+}
+
 async fn write(conn: &Conn, line: &[u8]) -> std::io::Result<()> {
     let mut w = conn.writer.lock().await;
     w.write_all(line).await?;
     w.flush().await
 }
 
-#[cfg(not(windows))]
-async fn write(_conn: &Conn, _line: &[u8]) -> std::io::Result<()> {
-    Err(std::io::Error::other("unsupported"))
-}
-
-#[cfg(windows)]
-async fn read_loop(mut reader: ReadHalf<NamedPipeClient>, conn: Arc<Conn>, test_hooks: Arc<AtomicBool>, test_hooks_changed: Arc<AtomicBool>) {
+async fn read_loop(mut reader: ReadHalf<Transport>, conn: Arc<Conn>, test_hooks: Arc<AtomicBool>, test_hooks_changed: Arc<AtomicBool>) {
     let mut lines = LineReader::default();
     let mut buf = vec![0u8; 64 * 1024];
     let mut bye = None;
@@ -498,8 +551,12 @@ pub const DATA_DIR_NAME: &str = if cfg!(debug_assertions) { "sta Dev" } else { "
 
 /// The default data directory of the matching sta build.
 pub fn default_data_dir() -> Option<PathBuf> {
-    let local = std::env::var_os("LOCALAPPDATA")?;
-    Some(Path::new(&local).join(DATA_DIR_NAME))
+    #[cfg(windows)]
+    let root = PathBuf::from(std::env::var_os("LOCALAPPDATA")?);
+    // The browser's `paths::default_root`.
+    #[cfg(not(windows))]
+    let root = PathBuf::from(std::env::var_os("HOME")?).join("Library/Application Support");
+    Some(root.join(DATA_DIR_NAME))
 }
 
 /// The profile subfolder of a data directory, where the browser writes [`ENDPOINT_FILE`] (the
@@ -514,6 +571,11 @@ const PROFILE_DIR: &str = "sta";
 /// next to it with either profile subfolder. The browser never writes the file anywhere else, and
 /// migrating moves a legacy folder only when no browser uses it, so at most one of them is live.
 pub fn endpoint_candidates(data_dir: &Path, default_dir: Option<&Path>, debug: bool) -> Vec<PathBuf> {
+    // Data folders from before the rename only exist on Windows (the browser's `paths::resolve`),
+    // so everywhere else there is exactly one place the file can be.
+    if !cfg!(windows) {
+        return vec![data_dir.join(PROFILE_DIR).join(ENDPOINT_FILE)];
+    }
     let mut bases = vec![data_dir.to_path_buf()];
     if let Some(parent) = default_dir.filter(|d| same_folder(d, data_dir)).and_then(Path::parent) {
         bases.push(parent.join(legacy::data_dir_name(debug)));
@@ -521,12 +583,13 @@ pub fn endpoint_candidates(data_dir: &Path, default_dir: Option<&Path>, debug: b
     bases.iter().flat_map(|base| [PROFILE_DIR, legacy::PROFILE_DIR].map(|profile| base.join(profile).join(ENDPOINT_FILE))).collect()
 }
 
-/// The same folder on Windows' case-insensitive file systems (separator style and trailing
-/// separators ignored; the browser's `paths::same_folder`).
+/// The same folder, with separator style and trailing separators ignored — and case too on
+/// Windows, whose file systems are case-insensitive (the browser's `paths::same_folder`).
 fn same_folder(a: &Path, b: &Path) -> bool {
     let normalized = |p: &Path| {
         let p = std::path::absolute(p).unwrap_or_else(|_| p.to_path_buf());
-        p.to_string_lossy().replace('/', "\\").trim_end_matches('\\').to_lowercase()
+        let text = p.to_string_lossy();
+        if cfg!(windows) { text.replace('/', "\\").trim_end_matches('\\').to_lowercase() } else { text.trim_end_matches('/').to_string() }
     };
     normalized(a) == normalized(b)
 }
@@ -549,6 +612,114 @@ pub fn read_endpoint_from(candidates: &[PathBuf], alive: impl Fn(u32) -> bool) -
     let live = found.iter().position(|e| e.pipe_is_valid() && alive(e.pid));
     let index = live.or((!found.is_empty()).then_some(0))?;
     found.into_iter().nth(index)
+}
+
+/// The Unix transport: a socket in the data directory instead of a named pipe. The checks the
+/// bridge makes before it says hello are the interesting part — everything above the transport is
+/// covered by the tests of the other platform as well.
+#[cfg(all(test, unix))]
+mod unix_tests {
+    use super::*;
+    use tokio::io::{AsyncBufReadExt, BufReader};
+    use tokio::net::UnixListener;
+
+    fn temp_dir(tag: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("sta-mcp-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("sta")).unwrap();
+        dir
+    }
+
+    fn socket_path(dir: &Path) -> String {
+        dir.join("sta").join(sta_core::agent::channel::SOCKET_FILE).to_string_lossy().into_owned()
+    }
+
+    fn write_endpoint(dir: &Path, socket: &str, pid: u32) {
+        let e = Endpoint { pipe: socket.into(), pid, protocol: PROTOCOL_VERSION, build: "test".into() };
+        std::fs::write(dir.join("sta").join(ENDPOINT_FILE), serde_json::to_string(&e).unwrap()).unwrap();
+    }
+
+    /// A fake browser: answers the hello with `first`, then every call with a result.
+    async fn fake_server(listener: UnixListener, first: Vec<BrowserMessage>, calls: usize) -> Vec<BridgeMessage> {
+        let (stream, _) = listener.accept().await.unwrap();
+        let (r, mut w) = tokio::io::split(stream);
+        let mut lines = BufReader::new(r).lines();
+        let mut seen = Vec::new();
+        seen.push(serde_json::from_str::<BridgeMessage>(&lines.next_line().await.unwrap().unwrap()).unwrap());
+        for m in first {
+            w.write_all(&to_line(&m)).await.unwrap();
+        }
+        for _ in 0..calls {
+            let Some(line) = lines.next_line().await.unwrap() else { break };
+            let msg: BridgeMessage = serde_json::from_str(&line).unwrap();
+            if let BridgeMessage::Call { id, tool, .. } = &msg {
+                let result = BrowserMessage::Result { id: *id, content: vec![Content::Text { text: format!("ran {tool}") }], structured: None, error: None };
+                w.write_all(&to_line(&result)).await.unwrap();
+            }
+            seen.push(msg);
+        }
+        seen
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn forwards_calls_over_the_socket() {
+        let dir = temp_dir("socket");
+        let path = socket_path(&dir);
+        let listener = UnixListener::bind(&path).unwrap();
+        // The endpoint names this process, which is also what serves the socket.
+        write_endpoint(&dir, &path, std::process::id());
+        let server = tokio::spawn(fake_server(listener, vec![BrowserMessage::Welcome { v: 1, session: 1, access: sta_core::AgentAccess::Full, test_hooks: false }], 1));
+
+        let channel = Channel::new(dir.clone(), false);
+        channel.set_client("claude-code", Some("Claude Code"), Some("2.1.268"));
+        let (content, _) = channel.call("tabs_list", Value::Null, std::future::pending()).await.expect("call");
+        assert_eq!(content, vec![Content::Text { text: "ran tabs_list".into() }]);
+        let seen = server.await.unwrap();
+        assert!(matches!(&seen[0], BridgeMessage::Hello { v, client, .. } if *v == PROTOCOL_VERSION && client.title.as_deref() == Some("Claude Code")));
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn a_socket_served_by_another_process_is_refused() {
+        let dir = temp_dir("imposter");
+        let path = socket_path(&dir);
+        let listener = UnixListener::bind(&path).unwrap();
+        // The endpoint file names pid 1, which is not what answers.
+        write_endpoint(&dir, &path, 1);
+        let _server = tokio::spawn(async move { listener.accept().await });
+        let channel = Channel::new(dir.clone(), false);
+        let e = channel.call("tabs_list", Value::Null, std::future::pending()).await.unwrap_err();
+        assert_eq!(e.code, ErrorCode::EndpointUntrusted, "{e:?}");
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn missing_or_bad_endpoints() {
+        let dir = temp_dir("missing");
+        let channel = Channel::new(dir.clone(), false);
+        assert_eq!(channel.call("tabs_list", Value::Null, std::future::pending()).await.unwrap_err().code, ErrorCode::BrowserNotRunning);
+        // Not a socket path sta would ever write.
+        write_endpoint(&dir, "relative/agent.sock", std::process::id());
+        assert_eq!(channel.call("tabs_list", Value::Null, std::future::pending()).await.unwrap_err().code, ErrorCode::EndpointUntrusted);
+        // A stale file: the path is fine, but nothing listens (and the pid is gone).
+        write_endpoint(&dir, &socket_path(&dir), u32::MAX - 1);
+        assert_eq!(channel.call("tabs_list", Value::Null, std::future::pending()).await.unwrap_err().code, ErrorCode::BrowserNotRunning);
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn the_endpoint_file_has_one_place() {
+        let dir = Path::new("/Users/someone/Library/Application Support/sta");
+        assert_eq!(endpoint_candidates(dir, Some(dir), cfg!(debug_assertions)), vec![dir.join(PROFILE_DIR).join(ENDPOINT_FILE)]);
+    }
+
+    #[test]
+    fn deadlines_follow_the_requested_wait() {
+        assert_eq!(deadline_for(&Value::Null), DEFAULT_DEADLINE_MS);
+        assert_eq!(deadline_for(&serde_json::json!({"timeoutMs": 60000})), 65_000);
+        assert_eq!(deadline_for(&serde_json::json!({"timeMs": 1000})), DEFAULT_DEADLINE_MS);
+        assert_eq!(deadline_for(&serde_json::json!({"timeoutMs": 10_000_000})), MAX_DEADLINE_MS);
+    }
 }
 
 #[cfg(all(test, windows))]

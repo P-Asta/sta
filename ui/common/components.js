@@ -8,7 +8,7 @@ import { h, html, render, useEffect, useLayoutEffect, useMemo, useRef, useState 
 import { Icon } from './icons.js';
 import { useLatest, useStableId } from './hooks.js';
 import * as motion from './motion.js';
-import { clamp, classNames, firstGraphemes, hostLetter, hostLetterColor } from './util.js';
+import { clamp, classNames, firstGraphemes, hostLetter, hostLetterColor, keyParts, shortcut } from './util.js';
 
 /** Every animation in this module is one of these keys (`crates/sta-core/src/motion.rs`). */
 const MENU_KEY = 'menus.popIn';
@@ -183,10 +183,11 @@ export function IconButton({ icon, label, size = 'md', iconSize, pressed, muted 
 
 /**
  * Keyboard shortcut chips: `<Kbd keys="Ctrl+Shift+K" />` → three `<kbd>` chips. Also accepts an
- * array of key labels. `Ctrl++` renders "Ctrl" and "+".
+ * array of key labels. `Ctrl++` renders "Ctrl" and "+". Combos are written the way this platform
+ * writes them (⌘ ⇧ on macOS, `keyParts`).
  */
 export function Kbd({ keys, class: className }) {
-  const parts = Array.isArray(keys) ? keys : String(keys ?? '').split(/\+(?=.)/);
+  const parts = keyParts(keys);
   return html`<span class=${classNames('kbd-group', className)}>
     ${parts.map((k, i) => html`<kbd class="kbd" key=${i}>${k}</kbd>`)}
   </span>`;
@@ -333,7 +334,7 @@ export function useCountPop(ref, value) {
  * @property {string} label
  * @property {string} [key]
  * @property {string} [icon] glyph name
- * @property {string} [hint] shortcut text, e.g. "Ctrl+D"
+ * @property {string} [hint] shortcut text, e.g. "Ctrl+D" (shown as "⌘D" on macOS)
  * @property {boolean} [disabled]
  * @property {boolean} [danger]
  * @property {boolean} [checked] renders a check and role="menuitemcheckbox"
@@ -537,7 +538,7 @@ function MenuList(props) {
             ${item.icon ? html`<${Icon} name=${item.icon} size=${16} />` : item.checked ? html`<${Icon} name="check" size=${16} />` : null}
           </span>`}
           <span class="menu-label">${item.label}</span>
-          ${item.hint && html`<span class="menu-hint">${item.hint}</span>`}
+          ${item.hint && html`<span class="menu-hint">${shortcut(item.hint)}</span>`}
           ${item.submenu && html`<span class="menu-trail"><${Icon} name="chevron-right" size=${14} /></span>`}
           ${role === 'listbox' && item.selected && html`<span class="menu-trail"><${Icon} name="check" size=${14} /></span>`}
         </div>`;

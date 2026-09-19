@@ -39,7 +39,6 @@
 
 use crate::platform::hidden_windows as hw;
 use crate::{browsers, controller, devtools_cdp, extensions, task, window};
-use cef::sys::MSG;
 use cef::*;
 use serde_json::{Value, json};
 use sta_core::extensions::{ExtensionDetails, ExtensionOp};
@@ -192,7 +191,7 @@ pub fn run(id: String, op: ExtensionOp) {
         fail(&id, op, "could not create the backend window");
         return;
     };
-    let root = cef_window.window_handle().0 as isize;
+    let root = crate::platform::handle_value(cef_window.window_handle());
     let known_root = CURRENT.with(|c| {
         let mut current = c.borrow_mut();
         let Some(current) = current.as_mut() else { return 0 };
@@ -264,7 +263,7 @@ fn on_browser_created(browser: &Browser) {
     // of a Window sta created), shutdown counts it there, and the DevTools client addresses browsers
     // through that registry — a backend browser outside it could never be sent a message.
     browsers::on_after_created(browser, false);
-    let root = browser.host().map(|h| hw::root_of(h.window_handle().0 as isize)).unwrap_or(0);
+    let root = browser.host().map(|h| hw::root_of(crate::platform::handle_value(h.window_handle()))).unwrap_or(0);
     CURRENT.with(|c| {
         if let Some(op) = c.borrow_mut().as_mut() {
             op.browser_id = Some(browser_id);
@@ -666,7 +665,7 @@ wrap_keyboard_handler! {
             &self,
             browser: Option<&mut Browser>,
             _event: Option<&KeyEvent>,
-            _os_event: Option<&mut MSG>,
+            _os_event: crate::platform::OsEvent<'_>,
             _is_keyboard_shortcut: Option<&mut i32>,
         ) -> i32 {
             // The window cannot be activated, so this should never fire; if it does, it eats the key.

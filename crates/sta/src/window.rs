@@ -199,7 +199,7 @@ fn build(window: Window) {
         fatal_startup_error("startup failure forced by STA_DEBUG_FAIL_STARTUP");
     }
     let frame = frame_color();
-    platform::apply_window_chrome(window.window_handle().0 as isize, is_dark());
+    platform::apply_window_chrome(platform::handle_value(window.window_handle()), is_dark());
     window.set_background_color(frame);
     let root_layout = window.set_to_box_layout(Some(&box_settings(true, no_insets())));
 
@@ -503,9 +503,9 @@ pub fn main_window() -> Option<Window> {
     VIEWS.with(|v| v.borrow().window.clone())
 }
 
-/// Raw HWND of the main window as an integer (0 if none).
+/// The main window's OS handle as an integer (`HWND` on Windows, `NSView*` on macOS; 0 if none).
 pub fn hwnd_value() -> isize {
-    main_window().map(|w| w.window_handle().0 as isize).unwrap_or(0)
+    main_window().map(|w| platform::handle_value(w.window_handle())).unwrap_or(0)
 }
 
 pub fn content_panel() -> Option<Panel> {
@@ -853,7 +853,7 @@ fn on_os_theme_colors_changed() {
     check_system_theme();
     // Chromium may reset DWM attributes on theme changes; re-apply ours.
     if let Some(window) = main_window() {
-        platform::apply_window_chrome(window.window_handle().0 as isize, is_dark());
+        platform::apply_window_chrome(platform::handle_value(window.window_handle()), is_dark());
     }
 }
 
@@ -921,7 +921,7 @@ fn apply_chrome(frame_argb: u32, dark: bool, card: [u32; 4]) {
     });
     if let Some(w) = &window {
         w.set_background_color(frame);
-        platform::apply_window_chrome(w.window_handle().0 as isize, dark);
+        platform::apply_window_chrome(platform::handle_value(w.window_handle()), dark);
     }
     for panel in [right, content_frame, content].into_iter().flatten() {
         panel.set_background_color(frame);
@@ -1122,6 +1122,13 @@ fn can_close() -> i32 {
         controller::dispatch(Command::WindowCloseRequested);
     }
     0
+}
+
+/// The OS asked sta to quit rather than to close a window (macOS ⌘Q, Dock → Quit, logout): the
+/// same answer as the window's own close button, so the session is saved and CEF shuts down.
+#[cfg(target_os = "macos")]
+pub fn request_close() {
+    let _ = can_close();
 }
 
 /// `Effect::Quit`: force-close every browser; the window closes when the last one is gone.

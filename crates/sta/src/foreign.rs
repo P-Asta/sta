@@ -56,7 +56,6 @@
 use crate::extension_files::{self, ExtensionFiles, Source};
 use crate::platform::hidden_windows as hw;
 use crate::{browsers, controller, downloads, platform, task, window};
-use cef::sys::MSG;
 use cef::*;
 use serde_json::{Value, json};
 use sta_core::{Command, ForeignBlockReason, ForeignExtension};
@@ -227,7 +226,7 @@ fn on_after_created(browser: &Browser) {
         log_debug!("foreign: browser {id} is a Views-hosted Chrome browser; not handled");
         return;
     }
-    let hwnd = host.window_handle().0 as isize;
+    let hwnd = crate::platform::handle_value(host.window_handle());
     let root = hw::root_of(hwnd);
     browsers::extra_register(id);
     stats(|s| s.created += 1);
@@ -295,7 +294,7 @@ fn on_after_created(browser: &Browser) {
 fn refresh_native_root(id: i32, attempt: u32) {
     let browser = ENTRIES.with(|e| e.borrow().get(&id).filter(|x| x.kind == Kind::KeepNative).map(|x| x.browser.clone()));
     let Some(browser) = browser else { return };
-    let root = browser.host().map(|h| hw::root_of(h.window_handle().0 as isize)).unwrap_or(0);
+    let root = browser.host().map(|h| hw::root_of(crate::platform::handle_value(h.window_handle()))).unwrap_or(0);
     if root == 0 {
         if attempt < 12 {
             task::post_ui_delayed(300, move || refresh_native_root(id, attempt + 1));
@@ -891,7 +890,7 @@ wrap_keyboard_handler! {
             &self,
             browser: Option<&mut Browser>,
             _event: Option<&KeyEvent>,
-            _os_event: Option<&mut MSG>,
+            _os_event: crate::platform::OsEvent<'_>,
             _is_keyboard_shortcut: Option<&mut i32>,
         ) -> i32 {
             // A hidden window never takes typing (the hooks already refuse its activation).

@@ -7,8 +7,10 @@ name: Release
 #
 #   git tag v0.2.0 && git push origin v0.2.0
 #
-# The tag has to match `[workspace.package] version` in Cargo.toml — the build fails first
-# otherwise, so a release can never claim a version the binaries do not report.
+# The tag decides the version: the build stamps `[workspace.package] version` in Cargo.toml with
+# it before compiling, so the binaries, the archive name and `latest.json` can never disagree with
+# the tag. That edit only lives on the runner — bump Cargo.toml on main as well, or local builds
+# keep reporting the old version (the workflow logs a warning when they differ).
 
 on:
   push:
@@ -18,7 +20,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Tag to build (must exist and match Cargo.toml)'
+        description: 'Tag to build (must exist; its version is what gets built)'
         required: true
 
 permissions:
@@ -98,17 +100,22 @@ jobs:
         with:
           node-version: 'lts/*'
 
-      - name: The tag and Cargo.toml must agree
+      # The tag names the release, so it also names the build: this stamps `[workspace.package]
+      # version` with the tag's version before anything compiles. Every crate inherits that line,
+      # so `sta --version`, the archive name and `latest.json` all report what the tag claims even
+      # when Cargo.toml on the tagged commit was never bumped. The edit lives in the runner's
+      # checkout and is never committed — bump Cargo.toml in the repo too, so local builds agree.
+      - name: Stamp the version from the tag
+        id: version
         shell: bash
         run: |
           TAG="${{ github.event.inputs.tag || github.ref_name }}"
           CARGO_VERSION="$(node tools/package-release.mjs version)"
-          if [ "$TAG" != "v$CARGO_VERSION" ]; then
-            echo "::error::tag $TAG does not match [workspace.package] version $CARGO_VERSION in Cargo.toml"
-            exit 1
+          VERSION="$(node tools/package-release.mjs version --set "$TAG")"
+          if [ "$CARGO_VERSION" != "$VERSION" ]; then
+            echo "::warning::Cargo.toml says $CARGO_VERSION but $TAG builds $VERSION — bump [workspace.package] version on main"
           fi
-          echo "version=$CARGO_VERSION" >> "$GITHUB_OUTPUT"
-        id: version
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Build
         run: cargo build --release -p sta -p sta-mcp

@@ -2,6 +2,7 @@
 // Packages a release build into the archive a release carries, and writes the manifest the
 // in-app updater reads (`crates/sta/src/update.rs`, docs/RELEASING.md).
 //
+//   node tools/package-release.mjs version  [--set 1.2.3]
 //   node tools/package-release.mjs stage    [--target-dir target/release] [--out dist]
 //   node tools/package-release.mjs manifest --archive dist/sta-1.2.3-windows-x64.zip [--notes "…"]
 //                                          [--out dist/latest.json] [--base <download url prefix>]
@@ -76,11 +77,37 @@ const PAYLOAD = {
   },
 };
 
-/** The workspace version — the one a `vX.Y.Z` tag has to match. */
+/** The `[workspace.package] version` line, as it sits in Cargo.toml. */
+const VERSION_LINE = /^(\s*version\s*=\s*)"([^"]+)"/m;
+
+/** The workspace version — the one a release is named after. */
 export function workspaceVersion() {
   const manifest = readFileSync(join(root, 'Cargo.toml'), 'utf8');
-  const version = manifest.match(/^\s*version\s*=\s*"([^"]+)"/m)?.[1];
+  const version = manifest.match(VERSION_LINE)?.[2];
   if (!version) throw new Error('no [workspace.package] version in Cargo.toml');
+  return version;
+}
+
+/**
+ * Rewrite `[workspace.package] version` in place and return what it now says.
+ *
+ * The release workflow calls this with the version off the tag, so a `vX.Y.Z` push cannot fail
+ * merely because Cargo.toml was never bumped: the tag is the release's name, and every crate
+ * inherits this line, so stamping it here is what keeps `sta --version`, the archive name and
+ * `latest.json` all reporting the version the tag claims. The edit is never committed.
+ */
+export function setWorkspaceVersion(version) {
+  if (!/^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)*$/.test(version)) {
+    throw new Error(`"${version}" is not a version cargo will accept`);
+  }
+  const file = join(root, 'Cargo.toml');
+  const manifest = readFileSync(file, 'utf8');
+  if (!VERSION_LINE.test(manifest)) throw new Error('no [workspace.package] version in Cargo.toml');
+  const current = manifest.match(VERSION_LINE)[2];
+  if (current !== version) {
+    writeFileSync(file, manifest.replace(VERSION_LINE, `$1"${version}"`));
+    console.error(`package-release: stamped [workspace.package] version ${current} -> ${version}`);
+  }
   return version;
 }
 
@@ -173,7 +200,11 @@ if (import.meta.url === `file://${process.argv[1].replace(/\\/g, '/')}` || proce
   try {
     if (command === 'stage') stage(parse(rest));
     else if (command === 'manifest') manifest(parse(rest));
-    else if (command === 'version') console.log(workspaceVersion());
+    else if (command === 'version') {
+      const args = parse(rest);
+      const set = args['--set'];
+      console.log(set && set !== 'true' ? setWorkspaceVersion(set.replace(/^v/, '')) : workspaceVersion());
+    }
     else {
       console.log('usage: package-release.mjs stage|manifest|version [options] (see the header)');
       process.exit(command ? 1 : 0);

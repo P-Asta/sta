@@ -22,8 +22,11 @@ git tag v0.2.0 → .github/workflows/release.yml → draft release (archives + l
    git push origin main --tags
    ```
 
-   The workflow's first step fails the build if the tag and `Cargo.toml` disagree — a release can
-   never claim a version its binaries do not report.
+   The tag is what the release is actually named after: before anything compiles, the workflow
+   stamps `[workspace.package] version` with the tag's version, so the binaries, the archive name
+   and `latest.json` can never disagree with the tag. That edit lives only on the runner, so if you
+   forget step 1 the build still succeeds — it logs a warning, and `Cargo.toml` on `main` keeps
+   reporting the old version for local builds until you bump it.
 3. Watch the run. It builds `--release`, refuses a binary that still carries the MCP test surface
    (`tools/check-release-clean.mjs`), stages the payload (`tools/package-release.mjs stage`), zips
    it, hashes it and leaves a **draft** release holding:

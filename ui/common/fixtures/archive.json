@@ -1,0 +1,80 @@
+[
+  {
+    "id": 12,
+    "url": "https://minecraft.wiki/w/Redstone_circuits",
+    "title": "Redstone circuits – Minecraft Wiki",
+    "host": "minecraft.wiki",
+    "favicon": null,
+    "archivedAt": 1789297980000,
+    "reason": "userClosed",
+    "space": 8,
+    "spaceIcon": "🎮",
+    "spaceName": "Play",
+    "group": 14
+  },
+  {
+    "id": 13,
+    "url": "https://www.chess.com/play/online",
+    "title": "Play Chess Online - Chess.com",
+    "host": "chess.com",
+    "favicon": null,
+    "archivedAt": 1789297980000,
+    "reason": "userClosed",
+    "space": 8,
+    "spaceIcon": "🎮",
+    "spaceName": "Play",
+    "group": 14
+  },
+  {
+    "id": 10,
+    "url": "https://www.reddit.com/r/Games/",
+    "title": "r/Games",
+    "host": "reddit.com",
+    "favicon": null,
+    "archivedAt": 1789293540000,
+    "reason": "userClosed",
+    "space": 8,
+    "spaceIcon": "🎮",
+    "spaceName": "Play",
+    "group": null
+  },
+  {
+    "id": 7,
+    "url": "https://gitlab.com/explore/projects",
+    "title": "Explore projects · GitLab",
+    "host": "gitlab.com",
+    "favicon": null,
+    "archivedAt": 1789220280000,
+    "reason": "userClosed",
+    "space": 1,
+    "spaceIcon": "🏠",
+    "spaceName": "Personal",
+    "group": null
+  },
+  {
+    "id": 6,
+    "url": "https://git-scm.com/docs/git-rebase#_interactive_mode",
+    "title": "Git - git-rebase Documentation",
+    "host": "git-scm.com",
+    "favicon": null,
+    "archivedAt": 1789220280000,
+    "reason": "userClosed",
+    "space": 1,
+    "spaceIcon": "🏠",
+    "spaceName": "Personal",
+    "group": null
+  },
+  {
+    "id": 3,
+    "url": "https://longreads.example.com/story/the-quiet-web",
+    "title": "The Quiet Web — A Very Long Read",
+    "host": "longreads.example.com",
+    "favicon": null,
+    "archivedAt": 1789219560000,
+    "reason": "auto",
+    "space": 1,
+    "spaceIcon": "🏠",
+    "spaceName": "Personal",
+    "group": null
+  }
+]

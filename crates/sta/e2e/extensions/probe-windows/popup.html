@@ -1,0 +1,16 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>sta probe popup</title>
+<style>
+  /* An explicit width, like every real action popup: it is what sta's measurement has to honour. */
+  html, body { margin: 0; }
+  body { width: 280px; font: 13px/1.4 system-ui, sans-serif; }
+  h1 { margin: 0; padding: 10px 12px; font-size: 14px; }
+  #work, #tabs { margin: 0; padding: 0 12px 10px; white-space: pre-wrap; }
+</style>
+<h1>sta probe: popup</h1>
+<!-- What a self-contained popup can do (storage), and what it sees of sta's tabs. Both are read by
+     extensions-e2e (gate S3): the second is the honest record of what prebuilt CEF allows. -->
+<pre id="work">storage: …</pre>
+<pre id="tabs">tabs: …</pre>
+<script src="popup.js"></script>

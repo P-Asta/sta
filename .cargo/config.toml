@@ -1,0 +1,3 @@
+[env]
+# Prebuilt CEF binaries are downloaded once into <repo>/.cef by cef-dll-sys.
+CEF_PATH = { value = ".cef", relative = true }

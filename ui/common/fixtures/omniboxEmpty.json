@@ -1,0 +1,174 @@
+{
+  "text": "",
+  "seq": 1,
+  "inlineCompletion": null,
+  "results": [
+    {
+      "key": "tab:33",
+      "group": "recentTabs",
+      "title": "rust - RefCell<T> already borrowed panic - Stack Overflow",
+      "subtitle": "stackoverflow.com · 🚀 Work",
+      "icon": {
+        "type": "favicon",
+        "url": null,
+        "host": "stackoverflow.com"
+      },
+      "hint": "Switch to Tab",
+      "command": {
+        "type": "activateItem",
+        "id": 33
+      },
+      "altCommand": null
+    },
+    {
+      "key": "tab:31",
+      "group": "recentTabs",
+      "title": "cef views overlay - Google Search",
+      "subtitle": "google.com · 🚀 Work",
+      "icon": {
+        "type": "favicon",
+        "url": null,
+        "host": "google.com"
+      },
+      "hint": "Switch to Tab",
+      "command": {
+        "type": "activateItem",
+        "id": 31
+      },
+      "altCommand": null
+    },
+    {
+      "key": "tab:35",
+      "group": "recentTabs",
+      "title": "serde - Rust",
+      "subtitle": "docs.rs · 🚀 Work",
+      "icon": {
+        "type": "favicon",
+        "url": null,
+        "host": "docs.rs"
+      },
+      "hint": "Switch to Tab",
+      "command": {
+        "type": "activateItem",
+        "id": 35
+      },
+      "altCommand": null
+    },
+    {
+      "key": "tab:34",
+      "group": "recentTabs",
+      "title": "sta UI – Figma",
+      "subtitle": "figma.com · 🚀 Work",
+      "icon": {
+        "type": "favicon",
+        "url": null,
+        "host": "figma.com"
+      },
+      "hint": "Switch to Tab",
+      "command": {
+        "type": "activateItem",
+        "id": 34
+      },
+      "altCommand": null
+    },
+    {
+      "key": "tab:32",
+      "group": "recentTabs",
+      "title": "lofi hip hop radio 📚 beats to relax/study to - YouTube",
+      "subtitle": "youtube.com · 🚀 Work",
+      "icon": {
+        "type": "favicon",
+        "url": null,
+        "host": "youtube.com"
+      },
+      "hint": "Switch to Tab",
+      "command": {
+        "type": "activateItem",
+        "id": 32
+      },
+      "altCommand": null
+    },
+    {
+      "key": "tab:30",
+      "group": "recentTabs",
+      "title": "oklch() - CSS: Cascading Style Sheets | MDN",
+      "subtitle": "developer.mozilla.org · 🚀 Work",
+      "icon": {
+        "type": "favicon",
+        "url": "https://developer.mozilla.org/favicon-48x48.png",
+        "host": "developer.mozilla.org"
+      },
+      "hint": "Switch to Tab",
+      "command": {
+        "type": "activateItem",
+        "id": 30
+      },
+      "altCommand": null
+    },
+    {
+      "key": "action:space.new",
+      "group": "suggestedActions",
+      "title": "New Space",
+      "subtitle": null,
+      "icon": {
+        "type": "glyph",
+        "name": "space"
+      },
+      "hint": null,
+      "command": {
+        "type": "openSidebarPanel",
+        "panel": {
+          "type": "newSpace"
+        }
+      },
+      "altCommand": null
+    },
+    {
+      "key": "action:view.archive",
+      "group": "suggestedActions",
+      "title": "View Archive",
+      "subtitle": null,
+      "icon": {
+        "type": "glyph",
+        "name": "archive"
+      },
+      "hint": null,
+      "command": {
+        "type": "openInternalPage",
+        "page": "archive"
+      },
+      "altCommand": null
+    },
+    {
+      "key": "action:sidebar.toggle",
+      "group": "suggestedActions",
+      "title": "Toggle Sidebar",
+      "subtitle": null,
+      "icon": {
+        "type": "glyph",
+        "name": "sidebar"
+      },
+      "hint": "Ctrl+S",
+      "command": {
+        "type": "toggleSidebar"
+      },
+      "altCommand": null
+    },
+    {
+      "key": "action:view.settings",
+      "group": "suggestedActions",
+      "title": "Open Settings",
+      "subtitle": null,
+      "icon": {
+        "type": "glyph",
+        "name": "settings"
+      },
+      "hint": "Ctrl+,",
+      "command": {
+        "type": "openInternalPage",
+        "page": "settings"
+      },
+      "altCommand": null
+    }
+  ]
+}

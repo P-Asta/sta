@@ -1,0 +1,109 @@
+/* sta top bar (PROTOCOL §4). Background is --frame; the whole bar is a window drag region
+ * except its controls. */
+
+html,
+body,
+#app {
+  height: 100%;
+  overflow: hidden;
+  background: var(--frame);
+}
+
+.topbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 520px) minmax(0, 1fr);
+  align-items: center;
+  height: var(--topbar-h);
+  background: var(--frame);
+  color: var(--text);
+}
+
+.tb-left {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  padding-left: var(--frame-gap);
+}
+
+.tb-left .nav-buttons {
+  margin-left: 2px;
+}
+
+.tb-left .icon-btn,
+.tb-split {
+  color: var(--text-muted);
+}
+
+.tb-left .icon-btn:hover:not(:disabled),
+.tb-split:hover:not(:disabled) {
+  color: var(--text);
+}
+
+.tb-center {
+  display: flex;
+  justify-content: center;
+  min-width: 0;
+  padding: 0 12px;
+}
+
+.tb-center .url-pill {
+  width: 100%;
+}
+
+.tb-right {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  align-self: stretch;
+  min-width: 0;
+}
+
+.tb-split {
+  margin-right: 6px;
+}
+
+.caption-buttons {
+  display: flex;
+  align-self: stretch;
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
+.caption-btn {
+  display: grid;
+  place-items: center;
+  width: var(--caption-btn-w);
+  height: var(--topbar-h);
+  color: var(--text);
+  transition: background-color 80ms linear, color 80ms linear;
+}
+
+.caption-btn:hover {
+  background: var(--hover);
+}
+
+.caption-btn:active {
+  background: var(--pressed);
+}
+
+.caption-glyph {
+  display: block;
+  overflow: visible;
+  shape-rendering: geometricPrecision;
+}
+
+.caption-close:hover {
+  background: #c42b1c;
+  color: #fff;
+}
+
+.caption-close:active {
+  background: rgba(196, 43, 28, 0.9);
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.topbar.is-inactive .caption-btn:not(:hover),
+.topbar.is-inactive .tb-left .icon-btn:not(:hover) {
+  color: var(--text-faint);
+}

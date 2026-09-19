@@ -1,0 +1,1912 @@
+/* sta sidebar (docs/PROTOCOL.md §5, docs/research/arc_spec.md §2 and §5 tokens).
+ * Colors come only from the ThemeColors custom properties (theme.js). The sidebar paints --frame at
+ * every window-edge-adjacent area so it joins the native frame seamlessly. */
+
+html,
+body {
+  overflow: hidden;
+  background: var(--frame);
+}
+
+#app {
+  height: 100%;
+}
+
+/* ------------------------------------------------------------------------------------ shell */
+
+.sidebar {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--frame);
+  color: var(--text);
+  overflow: hidden;
+  isolation: isolate;
+}
+
+/* A floating sidebar is laid out at the width its card settles at (`--float-width`) and pinned to
+ * the right edge of the page, because the window *clips* the card while the shell slides it in from
+ * outside (`crates/sta/src/motion.rs slide_sidebar`): the viewport grows from a sliver to the full
+ * width, and contents that filled it would be stretched into place instead of travelling in. Pinned
+ * right, they stand still relative to the card and ride it in. */
+.sidebar.is-floating {
+  left: auto;
+  width: var(--float-width, 100%);
+}
+
+/* Subtle vertical gradient that fades back to --frame at the top, bottom and right edges. */
+.sidebar-bg {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(180deg, var(--grad-start) 0%, var(--frame) 55%, var(--grad-end) 100%);
+  pointer-events: none;
+  -webkit-mask-image:
+    linear-gradient(to right, #000 0, #000 calc(100% - 64px), transparent calc(100% - 8px)),
+    linear-gradient(to bottom, transparent 0, transparent 8px, #000 72px, #000 calc(100% - 72px), transparent calc(100% - 8px));
+  -webkit-mask-composite: source-in;
+  mask-image:
+    linear-gradient(to right, #000 0, #000 calc(100% - 64px), transparent calc(100% - 8px)),
+    linear-gradient(to bottom, transparent 0, transparent 8px, #000 72px, #000 calc(100% - 72px), transparent calc(100% - 8px));
+  mask-composite: intersect;
+}
+
+.top-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: none;
+  gap: 2px;
+  height: var(--topbar-h);
+  padding: 0 var(--sidebar-pad-x);
+}
+
+.top-row-spacer {
+  flex: 1;
+  align-self: stretch;
+}
+
+.top-row .icon-btn {
+  color: var(--text-muted);
+}
+
+.top-row .icon-btn:hover:not(:disabled) {
+  color: var(--text);
+}
+
+.top-row .nav-buttons {
+  margin-left: 2px;
+}
+
+.pill-row {
+  flex: none;
+  padding: 0 var(--sidebar-pad-x);
+}
+
+.sidebar-main {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* Popups rendered inside the sidebar must never be window drag areas. */
+.menu,
+.popover,
+.space-sheet,
+.drag-ghost {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
+.menu {
+  min-width: min(200px, calc(100vw - 16px));
+}
+
+/* ------------------------------------------------------------------------------------ favorites */
+
+.favorites-wrap {
+  flex: none;
+  padding: 10px var(--sidebar-pad-x) 0;
+}
+
+.favorites {
+  display: grid;
+  grid-template-columns: repeat(var(--fav-cols, 4), minmax(0, 1fr));
+  gap: var(--fav-gap);
+}
+
+.fav-tile {
+  --tile-bg: color-mix(in srgb, var(--active-row) 46%, transparent);
+  position: relative;
+  display: grid;
+  place-items: center;
+  height: var(--fav-tile-h);
+  min-width: 0;
+  border-radius: var(--fav-radius);
+  background: var(--tile-bg);
+  /* `sidebar.favorites`: the press gives way and springs back. The individual `scale` property (not
+   * `transform`) keeps a drag ghost's inline `transform: translate(...)` intact. */
+  transition:
+    background-color var(--t-controls-hover-press),
+    box-shadow var(--t-controls-hover-press),
+    scale var(--t-sidebar-favorites) var(--ease-spring);
+}
+
+:root[data-theme="dark"] .fav-tile,
+.theme-scope[data-theme="dark"] .fav-tile {
+  --tile-bg: color-mix(in srgb, var(--active-row) 55%, transparent);
+}
+
+.fav-tile:hover {
+  background: color-mix(in srgb, var(--active-row) 75%, transparent);
+}
+
+.fav-tile:active {
+  scale: calc(1 - var(--motion-distance) * 0.04);
+}
+
+.fav-tile.is-active {
+  background: var(--active-row);
+  box-shadow: var(--active-row-shadow), inset 0 0 0 1px color-mix(in srgb, var(--accent) 28%, transparent);
+}
+
+:root[data-theme="dark"] .fav-tile.is-active,
+.theme-scope[data-theme="dark"] .fav-tile.is-active {
+  background: color-mix(in srgb, var(--active-row) 100%, rgba(255, 255, 255, 0.06));
+}
+
+.fav-tile.is-visible {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+.fav-tile:focus-visible {
+  outline-offset: -2px;
+}
+
+/* Dark monochrome favicons (e.g. GitHub's) vanish on dark tiles and rows: a faint light contour
+ * keeps them legible without changing colorful icons noticeably. */
+:root[data-theme="dark"] .sidebar img.favicon,
+.theme-scope[data-theme="dark"] img.favicon {
+  filter: drop-shadow(0 0 0.6px rgba(255, 255, 255, 0.55));
+}
+
+:root[data-theme="dark"] .sidebar img.favicon.is-dim,
+.theme-scope[data-theme="dark"] img.favicon.is-dim {
+  filter: grayscale(1) drop-shadow(0 0 0.6px rgba(255, 255, 255, 0.55));
+}
+
+/* The same in light mode for white monochrome favicons (sites pick them from the OS dark mode,
+ * e.g. GitHub's favicon-dark.svg), which vanish on white active rows and tiles. */
+:root[data-theme="light"] .sidebar img.favicon,
+.theme-scope[data-theme="light"] img.favicon {
+  filter: drop-shadow(0 0 0.6px rgba(0, 0, 0, 0.55));
+}
+
+:root[data-theme="light"] .sidebar img.favicon.is-dim,
+.theme-scope[data-theme="light"] img.favicon.is-dim {
+  filter: grayscale(1) drop-shadow(0 0 0.6px rgba(0, 0, 0, 0.55));
+}
+
+.fav-tile.is-unloaded > .favicon:not(.is-dim) {
+  opacity: 0.7;
+}
+
+.fav-badge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--text-muted);
+  box-shadow: 0 0 0 1px var(--border);
+}
+
+.fav-badge:hover {
+  color: var(--text);
+}
+
+.fav-badge.is-muted {
+  color: var(--text-faint);
+}
+
+.fav-navigated {
+  position: absolute;
+  bottom: 5px;
+  left: 50%;
+  width: 10px;
+  height: 2px;
+  margin-left: -5px;
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--text) 30%, transparent);
+}
+
+.fav-tile .row-permission {
+  top: 5px;
+  left: auto;
+  right: 5px;
+}
+
+.favorites-empty {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 40px;
+  border: 1px dashed color-mix(in srgb, var(--text) 22%, transparent);
+  border-radius: var(--fav-radius);
+  color: var(--text-muted);
+  font-size: var(--fs-small);
+}
+
+html.is-dragging:not([data-drag-kind="folder"]):not([data-drag-kind="split"]) .favorites-empty {
+  display: flex;
+}
+
+.fav-rename-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+  padding: 6px 8px 8px;
+  border-radius: var(--row-radius);
+  background: var(--active-row);
+}
+
+.fav-rename-label {
+  color: var(--text-muted);
+  font-size: var(--fs-caption);
+  font-weight: 600;
+}
+
+.fav-rename-row .row-rename {
+  margin: 0;
+  height: 28px;
+}
+
+/* ------------------------------------------------------------------------------------ space pane */
+
+.space-pane {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  margin-top: var(--section-gap);
+}
+
+/* `sidebar.spaceSwitch`: the pane is keyed by space id, so this plays once, at mount - no View
+ * Transition (critique issue 6), and the pane that left is an inert ghost (sidebar.js). */
+.space-pane.is-entering {
+  animation: space-in var(--t-sidebar-space-switch) var(--ease-out) both;
+}
+
+@keyframes space-in {
+  from {
+    opacity: 0;
+    translate: calc(var(--enter-dir, 1) * var(--motion-distance) * 26px) 0;
+  }
+}
+
+.space-title-row {
+  display: flex;
+  align-items: center;
+  flex: none;
+  gap: 8px;
+  height: var(--space-title-h);
+  margin: 0 var(--sidebar-pad-x);
+  padding: 0 5px 0 calc(var(--row-pad-x) - 1px);
+  border-radius: var(--row-radius);
+}
+
+.space-title-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 18px;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.space-title-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: var(--fs-space-title);
+  font-weight: var(--fw-space-title);
+  letter-spacing: 0.005em;
+}
+
+.space-title-more {
+  color: var(--text-muted);
+  opacity: 0;
+}
+
+.space-title-row:hover .space-title-more,
+.space-title-more:focus-visible {
+  opacity: 1;
+}
+
+.space-scroll-wrap {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.space-scroller {
+  position: absolute;
+  inset: 0;
+  padding: 2px var(--sidebar-pad-x) 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+}
+
+.space-scroller::-webkit-scrollbar {
+  display: none;
+}
+
+.space-scroller.fade-top {
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 16px);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 16px);
+}
+
+.space-scroller.fade-bottom {
+  -webkit-mask-image: linear-gradient(to top, transparent 0, #000 16px);
+  mask-image: linear-gradient(to top, transparent 0, #000 16px);
+}
+
+.space-scroller.fade-top.fade-bottom {
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 16px, #000 calc(100% - 16px), transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 16px, #000 calc(100% - 16px), transparent 100%);
+}
+
+.space-scroll-content {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+
+.list-end-zone {
+  height: 4px;
+}
+
+.today-end-zone {
+  flex: 1 0 24px;
+}
+
+.pinned-empty {
+  display: none;
+  align-items: center;
+  gap: 8px;
+  height: var(--row-h);
+  margin-bottom: var(--row-gap);
+  padding: 0 var(--row-pad-x);
+  border: 1px dashed color-mix(in srgb, var(--text) 22%, transparent);
+  border-radius: var(--row-radius);
+  color: var(--text-muted);
+  font-size: var(--fs-small);
+}
+
+html.is-dragging:not([data-drag-kind="split"]) .pinned-empty {
+  display: flex;
+}
+
+/* ------------------------------------------------------------------------------------ rows */
+
+.row {
+  position: relative;
+  /* The active fill is a `::before` layer (see below). A positioned pseudo-element paints in the
+   * positioned-descendants step, i.e. *above* a non-positioned child like `.row-title`, so the fill
+   * needs `z-index: -1` - which only lands below the content and above the row's own background if
+   * the row is its own stacking context. Without this the light theme's 78 % white fill washed the
+   * active row's label out (it was the least legible row in the sidebar). */
+  isolation: isolate;
+  display: flex;
+  align-items: center;
+  flex: none;
+  gap: var(--favicon-gap);
+  height: var(--row-h);
+  margin-bottom: var(--row-gap);
+  padding: 0 7px 0 calc(var(--row-pad-x) + var(--depth, 0) * 12px);
+  border-radius: var(--row-radius);
+  color: var(--text);
+  font-size: var(--fs-tab);
+  font-weight: var(--fw-tab);
+  line-height: var(--lh-tight);
+  transition: background-color var(--t-controls-hover-press), box-shadow var(--t-controls-hover-press);
+}
+
+.row:hover {
+  background: var(--hover);
+}
+
+.row:active:not(:has(button:active, input)) {
+  background: var(--pressed);
+}
+
+.row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* `sidebar.activeRow`: the active fill lives in its own layer so the highlight can crossfade from
+ * the row the user left to the one they opened (critique issue 19: one glider would have to track
+ * FLIP, folder toggles, rename, width drags and scrolling). `z-index: -1` inside the row's own
+ * stacking context (`.row { isolation: isolate }`) paints it above the row's own background - hover
+ * and pressed still read through - and below its content, so the label keeps full contrast. */
+.row::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--active-row);
+  box-shadow: var(--active-row-shadow);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--t-sidebar-active-row) var(--ease-out);
+}
+
+.row.is-active::before {
+  opacity: 1;
+}
+
+/* A drop target paints its own accent wash instead. */
+.row.is-drop-into::before {
+  opacity: 0;
+}
+
+.row.is-active {
+  font-weight: var(--fw-tab-active);
+}
+
+.row-icon {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: var(--favicon);
+  height: var(--favicon);
+}
+
+.row-icon.is-reset {
+  width: 22px;
+  height: 22px;
+  margin: 0 -3px;
+  border-radius: var(--radius-sm);
+  transition: background-color var(--t-controls-hover-press);
+}
+
+.row-icon.is-reset:hover {
+  background: var(--hover);
+}
+
+.row-icon-hover {
+  display: none;
+  color: var(--text);
+}
+
+.row-icon.is-reset:hover .row-icon-face {
+  display: none;
+}
+
+.row-icon.is-reset:hover .row-icon-hover {
+  display: grid;
+}
+
+.row-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.row.is-unloaded .row-title,
+.row.is-unloaded .row-icon > .tab-glyph,
+.split-seg.is-unloaded .row-title {
+  opacity: 0.6;
+}
+
+.row-slash {
+  margin-right: 4px;
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.row-hint {
+  display: none;
+  flex: none;
+  margin-right: 4px;
+  color: var(--text-faint);
+  font: var(--fs-caption) / 1 var(--font-mono);
+}
+
+.row:hover .row-hint {
+  display: block;
+}
+
+.row-close {
+  display: none;
+  margin: 0 -2px 0 -6px;
+  color: var(--text-muted);
+}
+
+.row-close:hover:not(:disabled) {
+  color: var(--text);
+}
+
+.row.is-active .row-close:hover:not(:disabled),
+.split-row.is-active .row-close:hover:not(:disabled) {
+  background: var(--pressed);
+}
+
+.row:hover > .row-close,
+.row:focus-visible > .row-close,
+.split-seg:hover > .row-close {
+  display: inline-grid;
+}
+
+/* With an audio button, the close button's slot is always reserved so the speaker never shifts
+ * under the pointer when the row becomes hovered. */
+.row:has(> .row-audio) > .row-close,
+.split-seg:has(> .row-audio) > .row-close {
+  display: inline-grid;
+  visibility: hidden;
+}
+
+.row:has(> .row-audio):hover > .row-close,
+.row:has(> .row-audio):focus-visible > .row-close,
+.split-seg:has(> .row-audio):hover > .row-close {
+  visibility: visible;
+}
+
+html.is-dragging .row:hover > .row-close,
+html.is-dragging .split-seg:hover > .row-close {
+  visibility: hidden;
+}
+
+.row-audio {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  margin: 0 -4px 0 -4px;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  transition: background-color var(--t-controls-hover-press), color var(--t-controls-hover-press);
+}
+
+.row-audio:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.row:hover > .row-audio + .row-close,
+.split-seg:hover > .row-audio + .row-close {
+  margin-left: -4px;
+}
+
+.row-audio.is-muted {
+  color: var(--text-faint);
+}
+
+/* Permission-pending dot on the favicon. `indicators.badges` owns its pulse (tokens.css turns it
+ * into a static double ring at `reduced`, at `off` and when the key is switched off). */
+.row-permission {
+  position: absolute;
+  top: 7px;
+  left: calc(var(--row-pad-x) + var(--depth, 0) * 12px + 11px);
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 2px var(--frame);
+  animation: permission-pulse calc(var(--t-indicators-badges) * 10) var(--ease-in-out) infinite;
+}
+
+@keyframes permission-pulse {
+  50% {
+    box-shadow: 0 0 0 2px var(--frame), 0 0 0 5px color-mix(in srgb, var(--accent) 25%, transparent);
+  }
+}
+
+.tab-spinner {
+  color: var(--accent);
+}
+
+.tab-glyph {
+  display: grid;
+  place-items: center;
+  color: var(--text-muted);
+}
+
+.tab-glyph.is-crashed {
+  color: var(--danger-text);
+}
+
+.tab-glyph.is-failed {
+  color: var(--warning);
+}
+
+.tab-glyph.is-internal {
+  color: var(--accent);
+}
+
+.tab-glyph.is-dim {
+  opacity: 0.6;
+  filter: grayscale(1);
+}
+
+/* Inline rename field. */
+.row-rename {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 26px;
+  margin: 0 -2px 0 -5px;
+  padding: 0 4px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  outline: none;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-weight: 400;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.row-rename::selection,
+.sidebar-popover input::selection,
+.space-sheet input::selection {
+  background: color-mix(in srgb, var(--accent) 38%, transparent);
+  color: var(--text);
+}
+
+.row.is-renaming,
+.row.is-renaming:hover {
+  background: var(--active-row);
+}
+
+/* Folder rows. */
+.folder-row {
+  height: var(--folder-row-h);
+}
+
+.folder-glyph {
+  color: var(--accent);
+}
+
+.folder-count {
+  flex: none;
+  min-width: 18px;
+  height: 16px;
+  padding: 0 5px;
+  border-radius: var(--radius-full);
+  background: var(--chip-bg);
+  color: var(--text-muted);
+  font: 600 10.5px / 16px var(--font-small);
+  text-align: center;
+}
+
+.folder-chevron {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin-right: 2px;
+  color: var(--text-faint);
+  rotate: 90deg;
+  transition: rotate var(--t-sidebar-folder-expand) var(--ease-out), color var(--t-controls-hover-press);
+}
+
+.folder-row.is-collapsed .folder-chevron {
+  rotate: none;
+}
+
+.folder-row:hover .folder-chevron {
+  color: var(--text-muted);
+}
+
+/* Split rows: one row, one segment per pane. */
+.split-row {
+  gap: 0;
+  padding: 0 3px;
+}
+
+.split-seg {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1 1 0;
+  gap: 8px;
+  min-width: 0;
+  height: 30px;
+  padding: 0 5px 0 7px;
+  border-radius: var(--radius-sm);
+  container-type: inline-size;
+  transition: background-color var(--t-controls-hover-press);
+}
+
+.split-seg:hover {
+  background: var(--hover);
+}
+
+.split-row:hover {
+  background: color-mix(in srgb, var(--hover) 60%, transparent);
+}
+
+/* `sidebar.splitRow`: a 2px accent bar under the focused pane, gliding between the segments. The
+ * segments are equal-width flex children, so one `translate` of its own width per step is exact. */
+.split-glider {
+  position: absolute;
+  bottom: 2px;
+  left: 3px;
+  width: calc((100% - 6px) / var(--seg-count, 1));
+  height: 2px;
+  border-radius: var(--radius-full);
+  background: var(--accent);
+  opacity: 0;
+  translate: calc(var(--seg-index, 0) * 100%) 0;
+  pointer-events: none;
+  transition: translate var(--t-sidebar-split-row) var(--ease-out), opacity var(--t-sidebar-split-row) linear;
+}
+
+.split-row.is-active .split-glider {
+  opacity: 0.85;
+}
+
+.split-sep {
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  left: -0.5px;
+  width: 1px;
+  background: var(--divider);
+}
+
+.split-seg:hover > .split-sep,
+.split-seg:hover + .split-seg > .split-sep {
+  opacity: 0;
+}
+
+.split-row .row-title {
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.split-row.is-active .split-seg.is-focused .row-title,
+.split-row:not(.is-active) .row-title {
+  color: var(--text);
+}
+
+.split-row.is-active .split-seg.is-focused .row-title {
+  font-weight: var(--fw-tab-active);
+}
+
+.split-seg .row-close {
+  margin: 0 -3px 0 -5px;
+}
+
+@container (max-width: 64px) {
+  .split-seg .row-title {
+    display: none;
+  }
+
+  .split-seg .row-icon {
+    margin: 0 auto;
+  }
+
+  .split-seg:hover > .row-icon {
+    display: none;
+  }
+
+  .split-seg:hover > .row-close {
+    margin: 0 auto;
+  }
+
+  .split-seg > .row-audio {
+    display: none;
+  }
+}
+
+.split-seg .row-permission {
+  top: 4px;
+  left: 18px;
+}
+
+/* New Tab row and Today divider. */
+.new-tab-row {
+  color: var(--text-muted);
+}
+
+.new-tab-row .row-icon {
+  color: var(--text-muted);
+}
+
+.new-tab-row:hover,
+.new-tab-row:hover .row-icon {
+  color: var(--text);
+}
+
+.today-divider {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: none;
+  height: 22px;
+  margin: 3px 0 4px;
+  padding: 0 4px 0 var(--row-pad-x);
+}
+
+/* The line makes room for the "Clear" button by clipping its right end, not by animating a margin: a
+ * layout transition in a docked surface relayouts the whole list every frame. */
+.today-divider-line {
+  flex: 1;
+  height: 1px;
+  background: var(--divider);
+  clip-path: inset(0);
+  transition: clip-path var(--t-controls-hover-press) var(--ease-out);
+}
+
+.today-clear {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  height: 18px;
+  padding: 0 7px 0 6px;
+  border-radius: var(--radius-full);
+  color: var(--text-muted);
+  font-size: var(--fs-caption);
+  font-weight: 500;
+  opacity: 0;
+  transition: opacity var(--t-controls-hover-press), background-color var(--t-controls-hover-press), color var(--t-controls-hover-press);
+}
+
+.today-divider.can-clear:hover .today-divider-line,
+.today-divider.can-clear:focus-within .today-divider-line {
+  clip-path: inset(0 60px 0 0);
+}
+
+.today-divider:hover .today-clear,
+.today-clear:focus-visible {
+  opacity: 1;
+}
+
+.today-clear:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+html.is-dragging .today-clear {
+  display: none;
+}
+
+/* ------------------------------------------------------------------------------------ drag & drop */
+
+html.is-dragging,
+html.is-dragging * {
+  cursor: grabbing !important;
+}
+
+html.is-dragging .row:not(.is-active):hover,
+html.is-dragging .row:not(.is-active):active,
+html.is-dragging .split-seg:hover,
+html.is-dragging .fav-tile:not(.is-active):hover,
+html.is-dragging .fav-tile:not(.is-active):active {
+  background: transparent;
+}
+
+html.is-dragging .fav-tile:active {
+  scale: 1;
+}
+
+html.is-dragging .row.is-active:hover {
+  background: transparent;
+}
+
+.is-drag-source {
+  opacity: 0.35;
+}
+
+.drop-line {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: var(--z-drag);
+  height: 2px;
+  border-radius: var(--radius-full);
+  background: var(--accent);
+  pointer-events: none;
+}
+
+.drop-line::before {
+  content: "";
+  position: absolute;
+  top: -2px;
+  left: -5px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.drop-line.is-vertical {
+  width: 2px;
+}
+
+.drop-line.is-vertical::before {
+  top: -5px;
+  left: -2px;
+}
+
+.row.is-drop-into,
+.pinned-empty.is-drop-into,
+.favorites-empty.is-drop-into {
+  background: color-mix(in srgb, var(--accent) 14%, transparent) !important;
+  box-shadow: inset 0 0 0 1.5px var(--accent);
+  border-color: transparent;
+  color: var(--text);
+}
+
+.is-split-target {
+  box-shadow: inset 0 0 0 1.5px var(--accent);
+}
+
+.is-split-target::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  width: calc(50% - 3px);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  pointer-events: none;
+}
+
+.is-split-target[data-split-side="left"]::after {
+  left: 3px;
+}
+
+.is-split-target[data-split-side="right"]::after {
+  right: 3px;
+}
+
+.drag-ghost {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: var(--z-drag);
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  height: 34px;
+  padding: 0 12px 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--row-radius);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-drag);
+  font-size: var(--fs-tab);
+  font-weight: 500;
+  opacity: 0.94;
+  pointer-events: none;
+  /* `sidebar.dragDrop`: the row lifts off the list. `scale` is the individual property, because the
+   * ghost's own inline `transform: translate(...)` follows the pointer (critique issue 11). */
+  scale: calc(1 + var(--motion-distance) * 0.03);
+  animation: ghost-lift var(--t-sidebar-drag-drop) var(--ease-out);
+}
+
+@keyframes ghost-lift {
+  from {
+    opacity: 0.4;
+    box-shadow: none;
+    scale: 1;
+  }
+}
+
+.drag-ghost.kind-fav {
+  justify-content: center;
+  width: 46px;
+  height: 46px;
+  padding: 0;
+  border-radius: var(--fav-radius);
+}
+
+.drag-ghost.kind-space {
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border-radius: var(--radius-lg);
+}
+
+.drag-ghost .space-btn {
+  background: none;
+  box-shadow: none;
+  filter: none;
+  opacity: 1;
+}
+
+.drag-ghost.is-rejected {
+  opacity: 0.55;
+}
+
+.drag-ghost-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+}
+
+.drag-ghost-icon + .drag-ghost-icon {
+  margin-left: -4px;
+}
+
+.drag-ghost-icon > .row-icon {
+  margin: 0;
+}
+
+.drag-ghost-label {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* Not a valid drop (favorites full, favorite onto a space): one shake plus a steady outline. */
+.is-drop-rejected {
+  border-radius: var(--fav-radius);
+  outline: 1.5px dashed color-mix(in srgb, var(--danger) 65%, transparent);
+  outline-offset: 3px;
+  animation: shake calc(var(--t-sidebar-drag-drop) * 2.5) var(--ease-out);
+}
+
+.space-btn.is-drop-rejected {
+  border-radius: var(--radius-md);
+  outline-offset: -1px;
+}
+
+@keyframes shake {
+  20%,
+  60% {
+    translate: calc(var(--motion-distance) * -3px) 0;
+  }
+  40%,
+  80% {
+    translate: calc(var(--motion-distance) * 3px) 0;
+  }
+}
+
+/* ------------------------------------------------------------------------------------ overlay scrollbar */
+
+/* Visible while scrolling, or when the pointer reaches the right edge of the list (8 px hit strip
+ * left of the resize handle). */
+.overlay-scrollbar {
+  position: absolute;
+  top: 4px;
+  right: 5px;
+  bottom: 4px;
+  z-index: 3;
+  width: 8px;
+  opacity: 0;
+  transition: opacity 320ms linear;
+}
+
+.overlay-scrollbar:hover,
+.overlay-scrollbar.is-active,
+.overlay-scrollbar.is-dragging {
+  opacity: 1;
+  transition-duration: 90ms;
+}
+
+.overlay-scrollbar-thumb {
+  position: absolute;
+  top: 0;
+  right: 1px;
+  width: 4px;
+  border-radius: var(--radius-full);
+  background: var(--scrollbar-thumb);
+  transition: width 120ms var(--ease-out), background-color var(--t-controls-hover-press);
+}
+
+.overlay-scrollbar:hover .overlay-scrollbar-thumb,
+.overlay-scrollbar.is-dragging .overlay-scrollbar-thumb {
+  width: 6px;
+  background: var(--scrollbar-thumb-hover);
+}
+
+/* ------------------------------------------------------------------------------------ bottom bar */
+
+.bottom-area {
+  position: relative;
+  flex: none;
+}
+
+.bottom-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: var(--bottom-bar-h);
+  padding: 0 var(--sidebar-pad-x);
+}
+
+.bottom-bar > .icon-btn {
+  color: var(--text-muted);
+}
+
+.bottom-bar > .icon-btn:hover:not(:disabled) {
+  color: var(--text);
+}
+
+.bb-downloads.is-busy {
+  color: var(--accent);
+}
+
+.bb-downloads .progress-ring {
+  color: var(--text);
+}
+
+/* `sidebar.downloads`: the ring hands over to a check mark when a download finishes. */
+.bb-downloads.is-done {
+  color: var(--success);
+}
+
+.bb-done {
+  display: grid;
+  place-items: center;
+}
+
+.space-strip {
+  display: flex;
+  align-items: center;
+  justify-content: safe center;
+  flex: 1 1 auto;
+  gap: var(--space-icon-gap);
+  min-width: 0;
+  height: 100%;
+  padding: 0 2px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+
+.space-strip::-webkit-scrollbar {
+  display: none;
+}
+
+.space-strip.fade-left {
+  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 18px);
+  mask-image: linear-gradient(to right, transparent 0, #000 18px);
+}
+
+.space-strip.fade-right {
+  -webkit-mask-image: linear-gradient(to left, transparent 0, #000 18px);
+  mask-image: linear-gradient(to left, transparent 0, #000 18px);
+}
+
+.space-strip.fade-left.fade-right {
+  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 18px, #000 calc(100% - 18px), transparent 100%);
+  mask-image: linear-gradient(to right, transparent 0, #000 18px, #000 calc(100% - 18px), transparent 100%);
+}
+
+.space-btn {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: var(--space-icon);
+  height: var(--space-icon);
+  border-radius: var(--radius-md);
+  font-size: 15px;
+  line-height: 1;
+  filter: saturate(0.7);
+  opacity: 0.62;
+  transition:
+    opacity var(--t-controls-hover-press),
+    filter var(--t-controls-hover-press),
+    background-color var(--t-controls-hover-press),
+    box-shadow var(--t-controls-hover-press),
+    transform var(--t-controls-press);
+}
+
+/* Emoji wash out faster on light frames. */
+:root[data-theme="light"] .space-btn:not(.is-active),
+.theme-scope[data-theme="light"] .space-btn:not(.is-active) {
+  opacity: 0.78;
+}
+
+.space-btn:hover {
+  background: var(--hover);
+  filter: none;
+  opacity: 1;
+}
+
+.space-btn:active {
+  transform: scale(0.94);
+}
+
+.space-btn.is-active {
+  background: var(--active-row);
+  box-shadow: var(--active-row-shadow);
+  filter: none;
+  opacity: 1;
+}
+
+.space-btn:focus-visible {
+  outline-offset: -2px;
+}
+
+.space-btn.is-drop-target {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  box-shadow: inset 0 0 0 1.5px var(--accent);
+  filter: none;
+  opacity: 1;
+  transform: scale(1.08);
+}
+
+/* In-progress download card above the bottom bar. */
+.dl-card {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 46px;
+  margin: 0 var(--sidebar-pad-x) 2px;
+  padding: 0 6px 0 0;
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--active-row) 62%, transparent);
+  animation: card-up var(--t-sidebar-downloads) var(--ease-out);
+}
+
+/* <= 4px of travel: the floating sidebar is a native card and clips its page (FINAL PLAN rule 5). */
+@keyframes card-up {
+  from {
+    opacity: 0;
+    translate: 0 calc(var(--motion-distance) * 4px);
+  }
+}
+
+.dl-card-main {
+  display: flex;
+  align-items: center;
+  flex: 1 1 auto;
+  gap: 9px;
+  min-width: 0;
+  height: 100%;
+  padding: 0 4px 0 8px;
+  border-radius: inherit;
+  text-align: left;
+}
+
+.dl-card-main:focus-visible {
+  outline-offset: -2px;
+}
+
+.dl-card-progress {
+  position: absolute;
+  right: 10px;
+  bottom: 5px;
+  left: 47px;
+  border-radius: var(--radius-full);
+}
+
+.dl-card .dl-status {
+  padding-bottom: 3px;
+}
+
+/* ------------------------------------------------------------------------------------ resize handle */
+
+.resize-handle {
+  position: absolute;
+  top: var(--topbar-h);
+  right: 0;
+  bottom: 0;
+  z-index: 5;
+  width: 5px;
+  cursor: ew-resize;
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
+.resize-handle::after {
+  content: "";
+  position: absolute;
+  top: 8px;
+  right: 1px;
+  bottom: 8px;
+  width: 2px;
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--text) 18%, transparent);
+  opacity: 0;
+  transition: opacity 120ms linear;
+}
+
+.resize-handle:hover::after {
+  opacity: 1;
+  transition-delay: 250ms;
+}
+
+html.is-resizing,
+html.is-resizing * {
+  cursor: ew-resize !important;
+}
+
+html.is-resizing .resize-handle::after {
+  opacity: 1;
+  transition-delay: 0ms;
+}
+
+/* ------------------------------------------------------------------------------------ floating (hover reveal) */
+
+/* The hidden sidebar floats over the content (docs/PROTOCOL.md §5), never a window drag area.
+ * Inside sta the shell draws a rounded card around it (12px radius, 1px border, a soft
+ * shadow, --frame above, below and beside the page: html.native-card), so the page only fades its
+ * gradient to --frame on every edge. Without the shell it draws a 1px border. */
+.native-card .sidebar.is-floating .sidebar-bg {
+  -webkit-mask-image:
+    linear-gradient(to right, transparent 0, #000 16px, #000 calc(100% - 64px), transparent calc(100% - 8px)),
+    linear-gradient(to bottom, transparent 0, transparent 8px, #000 72px, #000 calc(100% - 72px), transparent calc(100% - 8px));
+  mask-image:
+    linear-gradient(to right, transparent 0, #000 16px, #000 calc(100% - 64px), transparent calc(100% - 8px)),
+    linear-gradient(to bottom, transparent 0, transparent 8px, #000 72px, #000 calc(100% - 72px), transparent calc(100% - 8px));
+}
+
+html:not(.native-card) .sidebar.is-floating::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  border: 1px solid var(--border);
+  pointer-events: none;
+}
+
+.sidebar.is-floating .drag {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
+/* `sidebar.hoverReveal`. Contents are hidden before the shell hides (or parks) the sidebar, so the
+ * next reveal starts from an empty frame, then slide in from -24px.
+ *
+ * At the `full` level the **floating** card does not do that: the shell slides the whole host in
+ * from outside the window's left edge (`crates/sta/src/motion.rs slide_sidebar`), and contents that
+ * moved inside a card that is itself moving would slide twice. They are simply in place — the card
+ * waits outside the window (`SLIDE_LEAD_MS`) until they are painted. A docked sidebar has no card to
+ * move, and at `reduced` nothing travels at all, so both keep the animation below.
+ *
+ * The fade out is capped at `--t-surface-exit` (60ms): the shell's own hide and park delays are
+ * correctness delays of at least 50/60 ms that are never scaled away, and a fade that outlasts them
+ * would leave a half-faded frame to show on the next reveal (critique issue 2). A hiding sidebar also
+ * stops taking clicks - `is-hover-hidden` used to change opacity only, while the widget kept
+ * swallowing presses in its rectangle. */
+.sidebar.is-hover-hidden {
+  pointer-events: none;
+}
+
+.sidebar.is-hover-hidden > :not(.sidebar-bg) {
+  opacity: 0;
+  transition: opacity min(var(--t-sidebar-hover-reveal), var(--t-surface-exit)) linear;
+}
+
+.sidebar.is-hover-entering > :not(.sidebar-bg) {
+  animation: sidebar-hover-in var(--t-sidebar-hover-reveal) var(--ease-out) both;
+}
+
+:root[data-motion="full"] .sidebar.is-floating.is-hover-entering > :not(.sidebar-bg) {
+  animation: none;
+}
+
+@keyframes sidebar-hover-in {
+  from {
+    opacity: 0;
+    translate: calc(var(--motion-distance) * -24px) 0;
+  }
+  to {
+    opacity: 1;
+    translate: none;
+  }
+}
+
+/* ------------------------------------------------------------------------------------ popovers */
+
+.sidebar-popover {
+  padding: 6px;
+}
+
+.popover-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  height: 30px;
+  padding: 0 0 2px 8px;
+}
+
+.popover-title {
+  font-size: var(--fs-body);
+  font-weight: 600;
+}
+
+.edit-pinned {
+  padding: 8px 12px 12px;
+}
+
+/* The sidebar's own panels are `sidebar.panels`, not `menus.popIn`: they keep the shared pop-in
+ * keyframes (base.css) but take their duration — and their switch — from this key, which is also
+ * what their exit ghost runs under (`sidebar.js PanelGhost`). */
+.menu.app-menu,
+.popover.downloads-popover,
+.popover.edit-pinned {
+  animation-duration: var(--t-sidebar-panels);
+}
+
+.edit-pinned .popover-head {
+  padding-left: 0;
+}
+
+/* Downloads. */
+.dl-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* Row grid: the file tile spans two lines; the status line runs under the action buttons so it
+ * keeps most of the (narrow) sidebar width. A full-row button behind the content opens the file. */
+.dl-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) auto;
+  grid-template-areas:
+    "file name actions"
+    "file status status"
+    "progress progress progress";
+  align-items: center;
+  column-gap: 10px;
+  padding: 6px 4px 6px 7px;
+  border-radius: var(--radius-md);
+  transition: background-color var(--t-controls-hover-press);
+}
+
+.dl-row:hover,
+.dl-row.is-engaged {
+  background: var(--hover);
+}
+
+.dl-hit {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+
+.dl-hit:focus-visible {
+  outline-offset: -2px;
+}
+
+.dl-row > :not(.dl-hit) {
+  position: relative;
+  pointer-events: none;
+}
+
+.dl-row > .dl-actions {
+  pointer-events: auto;
+}
+
+.dl-row > .dl-file {
+  grid-area: file;
+  align-self: start;
+  margin-top: 2px;
+}
+
+.dl-name {
+  grid-area: name;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: var(--fs-body);
+  line-height: 22px;
+}
+
+.dl-status {
+  grid-area: status;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--text-muted);
+  font-family: var(--font-small);
+  font-size: var(--fs-caption);
+  font-variant-numeric: tabular-nums;
+  line-height: var(--lh-tight);
+}
+
+.dl-status.is-failed {
+  color: var(--danger-text);
+}
+
+.dl-actions {
+  grid-area: actions;
+  display: flex;
+  align-items: center;
+  margin-right: -2px;
+}
+
+.dl-actions .icon-btn {
+  color: var(--text-muted);
+}
+
+.dl-actions .icon-btn:hover:not(:disabled) {
+  color: var(--text);
+}
+
+/* The "…" slot is reserved (visibility) so the primary action never moves under the pointer;
+ * secondary actions appear to its left on hover. */
+.dl-actions .dl-more {
+  visibility: hidden;
+}
+
+.dl-actions .dl-secondary {
+  display: none;
+}
+
+.dl-row:hover .dl-actions .dl-more,
+.dl-row:focus-within .dl-actions .dl-more,
+.dl-row.is-engaged .dl-actions .dl-more {
+  visibility: visible;
+}
+
+.dl-row:hover .dl-actions .dl-secondary {
+  display: inline-grid;
+}
+
+.dl-progress {
+  grid-area: progress;
+  margin: 6px 2px 1px 40px;
+}
+
+.dl-card .dl-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.dl-card .dl-name {
+  line-height: var(--lh-tight);
+}
+
+.dl-file {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-md);
+  background: oklch(0.7 0.09 var(--file-hue, 250));
+  color: #fff;
+}
+
+.dl-file:has(.dl-ext) > svg {
+  display: none;
+}
+
+.dl-ext {
+  font: 700 9px / 1 var(--font-small);
+  letter-spacing: 0.02em;
+}
+
+.dl-row.is-cancelled .dl-file,
+.dl-row.is-interrupted .dl-file {
+  filter: grayscale(1);
+  opacity: 0.6;
+}
+
+.dl-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 18px 12px 22px;
+  color: var(--text);
+  text-align: center;
+}
+
+.dl-empty-glyph {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin-bottom: 6px;
+  border-radius: 50%;
+  background: var(--chip-bg);
+  color: var(--text-muted);
+}
+
+.dl-empty-hint {
+  color: var(--text-muted);
+  font-size: var(--fs-small);
+}
+
+/* ------------------------------------------------------------------------------------ space sheet */
+
+.space-sheet {
+  position: absolute;
+  top: calc(var(--topbar-h) + 2px);
+  right: var(--sidebar-pad-x);
+  left: var(--sidebar-pad-x);
+  max-height: calc(100% - var(--topbar-h) - 2px - var(--sidebar-pad-x));
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-menu);
+  animation: sheet-in var(--t-sidebar-panels) var(--ease-out);
+}
+
+@keyframes sheet-in {
+  from {
+    opacity: 0;
+    translate: 0 calc(var(--motion-distance) * 10px);
+    scale: calc(1 - var(--motion-distance) * 0.01);
+  }
+}
+
+.sheet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: none;
+  height: 44px;
+  padding: 0 8px 0 14px;
+}
+
+.sheet-title {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.sheet-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  gap: 14px;
+  min-height: 0;
+  padding: 2px 14px 14px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.sheet-identity {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sheet-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-xl);
+  background: var(--chip-bg);
+  box-shadow: inset 0 0 0 1px var(--border);
+  font-size: 23px;
+  line-height: 1;
+  transition: box-shadow var(--t-controls-hover-press), transform var(--t-controls-press);
+}
+
+.sheet-icon:hover {
+  box-shadow: inset 0 0 0 1px var(--field-border), 0 0 0 3px var(--accent-softer);
+}
+
+.sheet-icon:active {
+  transform: scale(0.96);
+}
+
+.sheet-icon.is-open {
+  box-shadow: inset 0 0 0 1px var(--border), 0 0 0 2px var(--accent);
+}
+
+.sheet-name {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.sheet-name .input {
+  height: 36px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.sheet-emoji .emoji-grid {
+  grid-template-columns: repeat(var(--emoji-cols, 6), minmax(0, 1fr));
+  max-height: 148px;
+  padding: 2px;
+  border-radius: var(--radius-md);
+  background: var(--field-bg);
+}
+
+.sheet-emoji .emoji-cell {
+  width: 100%;
+}
+
+.sheet-emoji .input {
+  height: 30px;
+  font-size: var(--fs-small);
+}
+
+.sheet-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sheet-label {
+  color: var(--text-muted);
+  font-size: var(--fs-small);
+  font-weight: 600;
+}
+
+.sheet-sublabel {
+  color: var(--text-muted);
+  font-size: var(--fs-caption);
+}
+
+.theme-swatches {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.theme-swatch {
+  position: relative;
+  height: 32px;
+  border-radius: var(--radius-md);
+  background: linear-gradient(135deg, var(--sw-a), var(--sw-b));
+  box-shadow: inset 0 0 0 1px var(--border);
+  transition: box-shadow var(--t-controls-hover-press), transform var(--t-controls-press);
+}
+
+.theme-swatch:hover {
+  box-shadow: inset 0 0 0 1px var(--field-border), 0 0 0 3px var(--accent-softer);
+}
+
+.theme-swatch:active {
+  transform: scale(0.96);
+}
+
+.theme-swatch.is-selected {
+  box-shadow: inset 0 0 0 1px var(--border), 0 0 0 2px var(--surface), 0 0 0 4px var(--sw-accent);
+}
+
+.theme-swatch-dot {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--sw-accent);
+}
+
+.theme-slider {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+}
+
+.theme-slider input[type="range"] {
+  width: 100%;
+  height: 18px;
+  margin: 0;
+  background: transparent;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.theme-slider input[type="range"]::-webkit-slider-runnable-track {
+  height: 8px;
+  border-radius: var(--radius-full);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+
+.hue-range::-webkit-slider-runnable-track {
+  background: linear-gradient(
+    to right,
+    oklch(0.72 0.12 0),
+    oklch(0.72 0.12 60),
+    oklch(0.72 0.12 120),
+    oklch(0.72 0.12 180),
+    oklch(0.72 0.12 240),
+    oklch(0.72 0.12 300),
+    oklch(0.72 0.12 360)
+  );
+}
+
+.chroma-range::-webkit-slider-runnable-track {
+  background: linear-gradient(to right, color-mix(in srgb, var(--text) 18%, transparent), var(--range-accent, var(--accent)));
+}
+
+.theme-slider input[type="range"]::-webkit-slider-thumb {
+  width: 16px;
+  height: 16px;
+  margin-top: -4px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: transparent;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25), 0 1px 3px rgba(0, 0, 0, 0.3);
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.theme-slider input[type="range"]:focus-visible {
+  outline: none;
+}
+
+.theme-slider input[type="range"]:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 2px var(--accent), 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.sheet-foot {
+  display: flex;
+  align-items: center;
+  flex: none;
+  gap: 6px;
+  min-height: 48px;
+  padding: 8px 10px;
+  border-top: 1px solid var(--divider);
+}
+
+.sheet-delete {
+  color: var(--danger-text);
+}
+
+.sheet-delete:hover:not(:disabled) {
+  background: var(--danger-soft);
+}
+
+.sheet-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.sheet-confirm-text {
+  font-size: var(--fs-small);
+  line-height: var(--lh-tight);
+}
+
+.sheet-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+/* No `prefers-reduced-motion` block: every animation in this file scales its travel with
+ * `--motion-distance` and reads its own key's duration token, so the motion levels and the per-key
+ * switches (tokens.css, including the bootstrap block for a page that has no state yet) cover them
+ * all — the permission dot's infinite pulse included, which belongs to `indicators.badges`. */

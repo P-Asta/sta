@@ -1,0 +1,83 @@
+/* Find bar overlay: a 360×44 card. Inside sta the shell draws it (8px radius, border, shadow)
+ * and the page is the 344×36 middle (html.native-card); in mock mode the page is the whole card. */
+
+html,
+body {
+  overflow: hidden;
+}
+
+.find {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 44px;
+  padding: 0 7px 0 14px;
+}
+
+.native-card .find {
+  height: 36px;
+  padding: 0 0 0 6px;
+}
+
+.find-input {
+  flex: 1;
+  min-width: 0;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--text);
+  font: 400 13.5px / 1.2 var(--font-ui);
+  caret-color: var(--accent);
+}
+
+.find-input::placeholder {
+  color: var(--text-faint);
+}
+
+.find-input::selection {
+  background: color-mix(in srgb, var(--accent) 28%, transparent);
+  color: var(--text);
+}
+
+.find-count {
+  flex: none;
+  min-width: 0;
+  padding: 0 6px 0 8px;
+  color: var(--text-muted);
+  font: 500 12px / 1 var(--font-small);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.find.is-empty .find-count {
+  color: var(--danger-text);
+}
+
+.find.is-empty .find-input {
+  color: var(--danger-text);
+}
+
+.find-sep {
+  flex: none;
+  width: 1px;
+  height: 20px;
+  margin: 0 4px;
+  background: var(--divider);
+}
+
+.find-btn {
+  width: 28px;
+  height: 28px;
+  color: var(--text-muted);
+}
+
+.find-btn:hover:not(:disabled) {
+  color: var(--text);
+}
+
+.find-btn[aria-pressed="true"] {
+  background: var(--accent-soft);
+  color: color-mix(in srgb, var(--accent) 80%, var(--text));
+}

@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- Same CSP as served pages (frame-ancestors is header-only, so it is omitted here). -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self'; base-uri 'none'; form-action 'none'"
+    />
+    <title>sta UI gallery</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="/common/tokens.css" />
+    <link rel="stylesheet" href="/common/base.css" />
+    <link rel="stylesheet" href="gallery.css" />
+    <script type="module" src="gallery.js"></script>
+  </head>
+  <body></body>
+</html>

@@ -1,0 +1,36 @@
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+# So bare `cargo run` / `cargo r` launches the browser shell instead of erroring on the
+# ambiguity with sta-mcp. Use `--workspace` to build/test every crate.
+default-members = ["crates/sta"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+authors = ["p-asta"]
+
+[workspace.dependencies]
+sta-core = { path = "crates/sta-core" }
+cef = { version = "=152.3.0", default-features = false }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rust-embed = "8.12"
+arboard = { version = "3.6", default-features = false }
+windows-sys = "0.61"
+embed-resource = "3"
+url = "2.5"
+psl = "2"
+regex = "1.11"
+# Inflate: the updater reads release archives with it (crates/sta/src/update.rs), and the
+# debug-only capture tools write PNGs with it.
+flate2 = "1"
+
+[profile.dev.package."*"]
+# Dependencies (notably the huge generated cef bindings) build optimized once.
+opt-level = 1
+
+[profile.release]
+lto = "thin"
+codegen-units = 4

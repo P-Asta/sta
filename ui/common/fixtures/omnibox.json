@@ -1,0 +1,215 @@
+{
+  "text": "git",
+  "seq": 1,
+  "inlineCompletion": "github.com",
+  "results": [
+    {
+      "key": "go",
+      "group": "go",
+      "title": "github.com",
+      "subtitle": "https://github.com",
+      "icon": {
+        "type": "glyph",
+        "name": "globe"
+      },
+      "hint": "↵",
+      "command": {
+        "type": "openInput",
+        "text": "github.com",
+        "target": "newTab"
+      },
+      "altCommand": {
+        "type": "openInput",
+        "text": "github.com",
+        "target": "backgroundTab"
+      }
+    },
+    {
+      "key": "tab:18",
+      "group": "tabs",
+      "title": "GitHub",
+      "subtitle": "github.com · Favorites",
+      "icon": {
+        "type": "favicon",
+        "url": "https://github.githubassets.com/favicons/favicon.svg",
+        "host": "github.com"
+      },
+      "hint": "Switch to Tab",
+      "command": {
+        "type": "activateItem",
+        "id": 18
+      },
+      "altCommand": null
+    },
+    {
+      "key": "tab:26",
+      "group": "tabs",
+      "title": "Keep split fractions on restore by p-asta · Pull Request #42",
+      "subtitle": "github.com · 🚀 Work",
+      "icon": {
+        "type": "favicon",
+        "url": null,
+        "host": "github.com"
+      },
+      "hint": "Switch to Tab",
+      "command": {
+        "type": "activateItem",
+        "id": 26
+      },
+      "altCommand": null
+    },
+    {
+      "key": "history:https://git-scm.com/docs/git-rebase",
+      "group": "history",
+      "title": "Git - git-rebase Documentation",
+      "subtitle": "git-scm.com",
+      "icon": {
+        "type": "favicon",
+        "url": null,
+        "host": "git-scm.com"
+      },
+      "hint": "3d ago",
+      "command": {
+        "type": "openUrl",
+        "url": "https://git-scm.com/docs/git-rebase",
+        "target": "newTab",
+        "opener": null
+      },
+      "altCommand": {
+        "type": "openUrl",
+        "url": "https://git-scm.com/docs/git-rebase",
+        "target": "backgroundTab",
+        "opener": null
+      }
+    },
+    {
+      "key": "history:https://gitlab.com/explore/projects",
+      "group": "history",
+      "title": "Explore projects · GitLab",
+      "subtitle": "gitlab.com",
+      "icon": {
+        "type": "favicon",
+        "url": null,
+        "host": "gitlab.com"
+      },
+      "hint": "3d ago",
+      "command": {
+        "type": "openUrl",
+        "url": "https://gitlab.com/explore/projects",
+        "target": "newTab",
+        "opener": null
+      },
+      "altCommand": {
+        "type": "openUrl",
+        "url": "https://gitlab.com/explore/projects",
+        "target": "backgroundTab",
+        "opener": null
+      }
+    },
+    {
+      "key": "suggest:github copilot",
+      "group": "suggestions",
+      "title": "github copilot",
+      "subtitle": null,
+      "icon": {
+        "type": "glyph",
+        "name": "search"
+      },
+      "hint": "Search",
+      "command": {
+        "type": "openUrl",
+        "url": "https://www.google.com/search?q=github%20copilot",
+        "target": "newTab",
+        "opener": null
+      },
+      "altCommand": {
+        "type": "openUrl",
+        "url": "https://www.google.com/search?q=github%20copilot",
+        "target": "backgroundTab",
+        "opener": null
+      }
+    },
+    {
+      "key": "suggest:git rebase interactive",
+      "group": "suggestions",
+      "title": "git rebase interactive",
+      "subtitle": null,
+      "icon": {
+        "type": "glyph",
+        "name": "search"
+      },
+      "hint": "Search",
+      "command": {
+        "type": "openUrl",
+        "url": "https://www.google.com/search?q=git%20rebase%20interactive",
+        "target": "newTab",
+        "opener": null
+      },
+      "altCommand": {
+        "type": "openUrl",
+        "url": "https://www.google.com/search?q=git%20rebase%20interactive",
+        "target": "backgroundTab",
+        "opener": null
+      }
+    },
+    {
+      "key": "suggest:gitignore template",
+      "group": "suggestions",
+      "title": "gitignore template",
+      "subtitle": null,
+      "icon": {
+        "type": "glyph",
+        "name": "search"
+      },
+      "hint": "Search",
+      "command": {
+        "type": "openUrl",
+        "url": "https://www.google.com/search?q=gitignore%20template",
+        "target": "newTab",
+        "opener": null
+      },
+      "altCommand": {
+        "type": "openUrl",
+        "url": "https://www.google.com/search?q=gitignore%20template",
+        "target": "backgroundTab",
+        "opener": null
+      }
+    },
+    {
+      "key": "archive:6",
+      "group": "archive",
+      "title": "Git - git-rebase Documentation",
+      "subtitle": "git-scm.com · archived 3d ago",
+      "icon": {
+        "type": "favicon",
+        "url": null,
+        "host": "git-scm.com"
+      },
+      "hint": "Restore",
+      "command": {
+        "type": "restoreArchived",
+        "id": 6,
+        "wholeGroup": false
+      },
+      "altCommand": null
+    },
+    {
+      "key": "archive:7",
+      "group": "archive",
+      "title": "Explore projects · GitLab",
+      "subtitle": "gitlab.com · archived 3d ago",
+      "icon": {
+        "type": "favicon",
+        "url": null,
+        "host": "gitlab.com"
+      },
+      "hint": "Restore",
+      "command": {
+        "type": "restoreArchived",
+        "id": 7,
+        "wholeGroup": false
+      },
+      "altCommand": null
+    }
+  ]
+}

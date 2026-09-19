@@ -1,0 +1,28 @@
+<!doctype html>
+<!-- Shell fallback for overlay surfaces whose ui/<host>/ page does not exist yet (scheme.rs).
+     The UI track's real page always wins. The shell draws the rounded card (border, shadow)
+     around it (rounded.rs), so the page itself has no edge. -->
+<html lang="en" class="surface-overlay">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self'; base-uri 'none'; form-action 'none'">
+  <title>sta overlay</title>
+  <style>
+    :root { --surface: #f7f6fa; --border: rgba(0,0,0,.14); --text: #1d1b22; --text-muted: #625d6e; --accent: #7b5cd6; color-scheme: light dark; }
+    html, body { margin: 0; background: var(--surface); color: var(--text); font: 13px "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; overflow: hidden; user-select: none; }
+    #root { box-sizing: border-box; display: flex; align-items: center; gap: 8px; padding: 0 10px; }
+    #root.column { flex-direction: column; align-items: stretch; padding: 10px 12px; }
+    input { flex: 1; min-width: 0; height: 28px; border: 1px solid var(--border); border-radius: 8px; padding: 0 8px; background: transparent; color: inherit; font: inherit; outline: none; }
+    input:focus { border-color: var(--accent); }
+    button { height: 28px; border: 1px solid var(--border); border-radius: 8px; background: transparent; color: inherit; font: inherit; padding: 0 10px; }
+    .muted { color: var(--text-muted); }
+    .ellipsis { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+    .cards { display: flex; gap: 8px; }
+    .card { box-sizing: border-box; width: 132px; height: 150px; border: 1px solid var(--border); border-radius: 12px; padding: 8px; }
+    .card.sel { border: 2px solid var(--accent); }
+    .row { display: flex; gap: 8px; justify-content: flex-end; }
+  </style>
+  <script type="module" src="__shell_placeholder.js"></script>
+</head>
+<body><div id="root"></div></body>
+</html>

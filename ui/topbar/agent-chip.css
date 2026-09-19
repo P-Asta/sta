@@ -1,0 +1,127 @@
+/* Topbar agent chip (agent-chip.js). 28 px high, never a drag region. */
+
+/* The right column never shrinks below the chip (the centered URL pill gives way first). */
+.topbar:has(.agent-chip) {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 520px) minmax(max-content, 1fr);
+}
+
+.agent-chip {
+  display: flex;
+  flex: none;
+  align-items: center;
+  height: 28px;
+  margin-right: 8px;
+  padding: 0 3px 0 0;
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--surface) 78%, transparent);
+  box-shadow: inset 0 0 0 1px var(--agent-ring);
+  color: var(--text);
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
+.agent-chip-main {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  height: 28px;
+  padding: 0 8px 0 9px;
+  border-radius: var(--radius-lg);
+  color: inherit;
+  font: 600 var(--fs-small) / 1 var(--font-ui);
+  transition: background-color var(--t-controls-hover-press);
+}
+
+.agent-chip-main:hover,
+.agent-chip-main[aria-expanded="true"] {
+  background: var(--agent-softer);
+}
+
+.agent-chip-main .agent-pulse,
+.agent-chip-main > svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  color: var(--agent);
+}
+
+.agent-chip-label {
+  max-width: 160px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.agent-chip-action {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 5px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: var(--radius-md);
+  background: var(--chip-bg);
+  color: var(--text);
+  font: 600 var(--fs-caption) / 1 var(--font-small);
+  transition: background-color var(--t-controls-hover-press), color var(--t-controls-hover-press);
+}
+
+.agent-stop-square {
+  width: 8px;
+  height: 8px;
+  border-radius: 25%;
+  background: currentColor;
+}
+
+.agent-chip-action.is-stop:hover {
+  background: var(--danger);
+  color: #fff;
+  box-shadow: none;
+}
+
+.agent-chip-action.is-resume:hover {
+  background: var(--agent);
+  color: var(--on-agent);
+  box-shadow: none;
+}
+
+.agent-chip.is-asking {
+  background: var(--agent);
+  box-shadow: none;
+  color: var(--on-agent);
+}
+
+.agent-chip.is-asking .agent-chip-action {
+  background: color-mix(in srgb, #fff 92%, transparent);
+  color: #1c1b20;
+}
+
+.agent-chip.is-asking .agent-chip-main .agent-pulse {
+  color: var(--on-agent);
+}
+
+.agent-chip.is-asking .agent-chip-main:hover,
+.agent-chip.is-asking .agent-chip-main[aria-expanded="true"] {
+  background: color-mix(in srgb, #000 12%, transparent);
+}
+
+.agent-chip.is-paused,
+.agent-chip.is-idle {
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+
+.agent-chip.is-paused .agent-chip-main > svg,
+.agent-chip.is-idle .agent-chip-main > svg {
+  color: var(--text-muted);
+}
+
+.agent-chip.is-paused .agent-chip-main:hover,
+.agent-chip.is-paused .agent-chip-main[aria-expanded="true"],
+.agent-chip.is-idle .agent-chip-main:hover {
+  background: var(--hover);
+}
+
+.agent-chip.is-idle {
+  padding-right: 0;
+}

@@ -1,0 +1,10 @@
+{
+  "id": 38,
+  "name": "GitHub wide",
+  "host": "github.com",
+  "enabled": true,
+  "css": "/* Use the full window width for code and diffs */\n.container-xl, .container-lg {\n  max-width: none !important;\n}\n",
+  "js": "// Collapse the file tree by default on pull request pages\ndocument.querySelector('[data-hotkey=\"Control+b\"]')?.click();\n",
+  "createdAt": 1789341600000,
+  "updatedAt": 1789341600000
+}

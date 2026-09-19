@@ -1,0 +1,61 @@
+[package]
+name = "sta"
+description = "sta browser shell: CEF Views window, tabs, overlays, IPC and platform glue."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+build = "build.rs"
+
+[features]
+default = []
+# The debug-only MCP test surface (docs/TESTING.md, src/test_hooks/). Never a default feature, and
+# `src/test_hooks/mod.rs` turns enabling it in a release build into a compile error.
+test-hooks = ["sta-core/test-hooks"]
+
+[dependencies]
+sta-core.workspace = true
+cef.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+rust-embed.workspace = true
+url.workspace = true
+# The updater unpacks release archives with it (`update.rs`); `test_capture`'s PNG writer and
+# `test_pixels`' PNG reader (test-hooks builds) use it too.
+flate2.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { workspace = true, features = [
+    "Win32_Foundation",
+    "Win32_Globalization",
+    "Win32_Graphics_Dwm",
+    "Win32_Storage_FileSystem",
+    "Win32_System_Com",
+    "Win32_System_Console",
+    "Win32_System_DataExchange",
+    "Win32_System_Memory",
+    "Win32_System_Ole",
+    "Win32_System_Registry",
+    "Win32_System_Threading",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_Shell",
+    "Win32_UI_Shell_Common",
+    "Win32_UI_WindowsAndMessaging",
+    # AI agents (automation/): named pipe, security descriptor, client identity
+    "Win32_Security",
+    "Win32_Security_Authorization",
+    "Win32_Security_Cryptography",
+    "Win32_Security_Cryptography_Catalog",
+    "Win32_Security_Cryptography_Sip",
+    "Win32_Security_WinTrust",
+    "Win32_System_Diagnostics_ToolHelp",
+    "Win32_System_IO",
+    "Win32_System_Pipes",
+    "Win32_System_RemoteDesktop",
+    # Chrome-created windows (platform/hidden_windows.rs): WinEvent hooks, monitor work area
+    "Win32_UI_Accessibility",
+    "Win32_Graphics_Gdi",
+] }
+
+[target.'cfg(windows)'.build-dependencies]
+embed-resource.workspace = true

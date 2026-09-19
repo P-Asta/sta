@@ -1,0 +1,24 @@
+[package]
+name = "sta-core"
+description = "sta browser state model, commands/effects reducer, omnibox and persistence. No CEF dependency."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[features]
+default = []
+# The debug-only MCP test surface's catalog and error codes (docs/TESTING.md). Never a default
+# feature; `sta` turns enabling it in a release build into a compile error.
+test-hooks = []
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+url.workspace = true
+psl.workspace = true
+regex.workspace = true
+
+[lints.clippy]
+# The contract's `Default` impls (model.rs) are written out on purpose: they document the defaults
+# next to the wire types.
+derivable_impls = "allow"

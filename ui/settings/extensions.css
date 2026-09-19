@@ -1,0 +1,146 @@
+/* Settings › Extensions: one row per extension, with the Turn on disclosure and the Remove confirm
+ * opening inside the row (never a dialog: the warnings must be readable next to what they are about). */
+
+.xs-row {
+  display: block;
+}
+
+.xs-main {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.xs-icon {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  background: var(--field-bg);
+}
+
+.xs-icon.is-off {
+  opacity: 0.5;
+}
+
+.xs-controls {
+  gap: 4px;
+}
+
+.xs-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0 0 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--field-bg);
+  color: var(--text-muted);
+  font: 400 12.5px / 1.5 var(--font-ui);
+}
+
+.xs-banner > svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--text-muted);
+}
+
+.xs-banner.is-warn {
+  border-color: color-mix(in srgb, var(--danger) 40%, var(--border));
+  background: var(--danger-soft);
+  color: var(--danger-text);
+}
+
+.xs-banner.is-warn > svg {
+  color: var(--danger-text);
+}
+
+.xs-empty {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 16px;
+  color: var(--text-muted);
+  font: 400 12.5px / 1.55 var(--font-ui);
+}
+
+.xs-empty > svg {
+  flex: none;
+  margin-top: 1px;
+}
+
+.xs-note {
+  margin: 10px 2px 0;
+  color: var(--text-muted);
+  font: 400 12px / 1.55 var(--font-ui);
+}
+
+/* The row the picker sent the user to, briefly. */
+.xs-row.is-target {
+  background: var(--accent-soft);
+}
+
+.xs-detail {
+  margin: 10px 0 2px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--field-bg);
+}
+
+.xs-detail-lead,
+.xs-detail-line,
+.xs-detail-loading {
+  margin: 0 0 6px;
+  color: var(--text);
+  font: 400 12.5px / 1.5 var(--font-ui);
+}
+
+.xs-detail-line,
+.xs-detail-loading {
+  color: var(--text-muted);
+}
+
+/* Chrome's own permission warnings. The global reset turns every list marker off (base.css), which
+ * left the one list this whole panel exists for looking like two indented sentences — and a warning
+ * long enough to wrap indistinguishable from two warnings. */
+.xs-warnings {
+  margin: 0 0 8px;
+  padding-left: 18px;
+  list-style: disc;
+  color: var(--text);
+  font: 400 12.5px / 1.55 var(--font-ui);
+}
+
+.xs-warnings > li {
+  margin: 2px 0;
+}
+
+.xs-detail-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+
+/* The source line gets at most two lines: a folder path is the thing R-SEC-2 asks the user to judge,
+ * so it has to be readable, but it must not push the row three lines high either. */
+.xs-desc {
+  display: -webkit-box;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+/* Why sta will not offer to turn this extension on (a local CRX, or policy). */
+.xs-refusal {
+  margin-top: 2px;
+  color: var(--text-muted);
+}

@@ -1,0 +1,357 @@
+/* Boosts page: list of boosts on the left, editor on the right. */
+
+.bst-page {
+  max-width: 1080px;
+}
+
+.bst {
+  display: grid;
+  grid-template-columns: 236px minmax(0, 1fr);
+  align-items: start;
+  gap: 28px;
+  padding-top: 6px;
+}
+
+/* ------------------------------------------------------------------------------------ list */
+
+.bst-list {
+  position: sticky;
+  top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: calc(100vh - 24px);
+  overflow-y: auto;
+}
+
+.bst-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 6px 10px;
+  border-radius: var(--radius-md);
+  color: var(--text);
+  text-align: left;
+  transition: background-color var(--t-controls-hover-press);
+}
+
+.bst-item:hover {
+  background: var(--hover);
+}
+
+/* The selected row's tint is `.ip-nav-indicator` behind it (`pages.navIndicator`), so it can glide. */
+.bst-item.is-selected {
+  background: transparent;
+}
+
+.bst-item:focus-visible {
+  outline-offset: -2px;
+}
+
+.bst-item-icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-md);
+  background: var(--accent-soft);
+  color: color-mix(in srgb, var(--accent) 82%, var(--text));
+}
+
+.bst-item.is-selected .bst-item-icon {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.bst-item.is-off .bst-item-icon {
+  background: var(--field-bg);
+  color: var(--text-faint);
+}
+
+.bst-item-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.bst-item-name,
+.bst-item-host {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.bst-item-name {
+  font-size: 13.5px;
+  font-weight: 500;
+  line-height: 18px;
+}
+
+.bst-item-host {
+  color: var(--text-muted);
+  font-size: var(--fs-small);
+  line-height: 16px;
+}
+
+.bst-empty-action {
+  display: flex;
+  justify-content: center;
+  margin-top: -40px;
+}
+
+/* ------------------------------------------------------------------------------------ editor */
+
+.bst-main {
+  min-width: 0;
+}
+
+/* `pages.boostsEditor`: switching boosts cross-fades the editor and nothing else. The root's own
+ * snapshot is turned off, so only `.bst-main` is captured — otherwise the whole page, list and
+ * header included, would fade under a selection change. `boosts.js` fetches the boost *before* it
+ * starts the transition, and the update callback is synchronous (motion.js `viewTransition`);
+ * `motion.js` refuses the transition entirely at `reduced` and `off`, so nothing here needs a
+ * fallback. The snapshots never take clicks. */
+:root {
+  view-transition-name: none;
+}
+
+.bst-main {
+  view-transition-name: bst-editor;
+}
+
+::view-transition {
+  pointer-events: none;
+}
+
+::view-transition-group(bst-editor),
+::view-transition-old(bst-editor),
+::view-transition-new(bst-editor) {
+  animation-duration: var(--t-pages-boosts-editor);
+  animation-timing-function: var(--ease-out);
+}
+
+.bst-loading {
+  height: 320px;
+}
+
+.bst-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.bst-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.bst-head-icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-lg);
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.bst-head-icon.is-off {
+  background: var(--field-bg);
+  color: var(--text-faint);
+}
+
+.bst-name {
+  flex: 1;
+  min-width: 0;
+  height: 38px;
+  padding: 0 8px;
+  margin-left: -8px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  outline: none;
+  background: transparent;
+  color: var(--text);
+  font: 600 19px / 1.2 var(--font-display);
+  transition: border-color var(--t-controls-hover-press), background-color var(--t-controls-hover-press);
+}
+
+.bst-name:hover {
+  background: var(--field-bg);
+}
+
+.bst-name:focus {
+  border-color: var(--accent);
+  background: var(--field-bg);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.bst-name::placeholder {
+  color: var(--text-faint);
+}
+
+.bst-enabled {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: var(--fs-small);
+  font-weight: 500;
+}
+
+.bst-site {
+  max-width: 420px;
+}
+
+.bst-code {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--field-border);
+  border-radius: var(--radius-xl);
+  background: color-mix(in srgb, var(--text) 2.5%, var(--surface));
+  transition: border-color var(--t-controls-hover-press), box-shadow var(--t-controls-hover-press);
+}
+
+.bst-code:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.bst-code-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 12px 0 14px;
+  border-bottom: 1px solid var(--divider);
+}
+
+.bst-code-label {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.bst-code-lang {
+  padding: 1px 5px;
+  border-radius: var(--radius-xs);
+  background: var(--chip-bg);
+  color: var(--text-muted);
+  font: 10.5px / 1.4 var(--font-mono);
+}
+
+.bst-code-hint {
+  overflow: hidden;
+  color: var(--text-faint);
+  font-size: var(--fs-caption);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.bst-code-lines {
+  margin-left: auto;
+  color: var(--text-faint);
+  font-size: var(--fs-caption);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.bst-textarea {
+  display: block;
+  width: 100%;
+  min-height: 220px;
+  padding: 12px 14px;
+  border: 0;
+  outline: none;
+  resize: vertical;
+  background: transparent;
+  color: var(--text);
+  font: 12.5px / 1.6 var(--font-mono);
+  white-space: pre;
+  overflow-wrap: normal;
+  overflow-x: auto;
+  tab-size: 2;
+  caret-color: var(--accent);
+}
+
+.bst-textarea::placeholder {
+  color: var(--text-faint);
+}
+
+.bst-textarea::selection {
+  background: color-mix(in srgb, var(--accent) 26%, transparent);
+}
+
+.bst-foot {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 -4px;
+  padding: 12px 4px 16px;
+  background: linear-gradient(to bottom, color-mix(in srgb, var(--surface) 0%, transparent), var(--surface) 12px);
+}
+
+.bst-foot-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.bst-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+  font-size: var(--fs-small);
+}
+
+.bst-status.is-dirty::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--warning);
+}
+
+.bst-status.is-saved {
+  color: var(--success);
+}
+
+.bst-status.is-error {
+  color: var(--danger-text);
+}
+
+.bst-new {
+  width: 320px;
+  padding: 14px;
+}
+
+.bst-new-title {
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.bst-new-text {
+  margin: 4px 0 12px;
+  color: var(--text-muted);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+@media (max-width: 760px) {
+  .bst {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .bst-list {
+    position: static;
+    max-height: none;
+  }
+}

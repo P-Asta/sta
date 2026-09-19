@@ -1,0 +1,404 @@
+/* Command bar overlay (arc_spec §5 "Command Bar visuals"). The page is an opaque --surface
+ * rectangle; inside sta the shell draws the rounded card around it (html.native-card: 12px
+ * radius, 1px border, shadow, and 12px of surface above and below the page, 4px beside it), so the
+ * input row is 12px shorter there and the paddings keep the same distances from the card edge. */
+
+html,
+body {
+  overflow: hidden;
+}
+
+body {
+  background: var(--surface);
+}
+
+html.native-card {
+  --cmd-input-h: 44px;
+}
+
+.cmd {
+  display: flex;
+  flex-direction: column;
+}
+
+/* ------------------------------------------------------------------------------------ input */
+
+.cmd-input-row {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 12px;
+  height: var(--cmd-input-h);
+  padding: 0 14px 0 18px;
+}
+
+.native-card .cmd-input-row {
+  padding: 0 10px 0 14px;
+}
+
+.cmd-lead {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  color: var(--text-muted);
+}
+
+.cmd-input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--text);
+  font: 400 var(--fs-cmd-input) / 1.2 var(--font-ui);
+  caret-color: var(--accent);
+}
+
+.cmd-input::placeholder {
+  color: var(--text-faint);
+}
+
+.cmd-input::selection {
+  background: color-mix(in srgb, var(--accent) 28%, transparent);
+  color: var(--text);
+}
+
+/* Mode chip: the current mode plus a "Tab" key cap; Tab or a click toggles actions mode. */
+.cmd-mode {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 7px;
+  height: 24px;
+  margin: 0;
+  padding: 0 4px 0 9px;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: var(--accent-soft);
+  color: color-mix(in srgb, var(--accent) 78%, var(--text));
+  font: 600 11.5px / 1 var(--font-ui);
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  cursor: default;
+  transition:
+    background-color var(--t-controls-hover-press),
+    color var(--t-controls-hover-press);
+}
+
+.cmd-mode:hover {
+  background: color-mix(in srgb, var(--accent) 19%, transparent);
+}
+
+.cmd-mode:active {
+  background: color-mix(in srgb, var(--accent) 25%, transparent);
+}
+
+.cmd-mode-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.cmd-mode-label > svg {
+  flex: none;
+  opacity: 0.85;
+}
+
+.cmd-mode-kbd {
+  display: inline-grid;
+  place-items: center;
+  height: 16px;
+  padding: 0 4px;
+  border: 1px solid color-mix(in srgb, var(--accent) 26%, transparent);
+  border-radius: var(--radius-xs);
+  background: color-mix(in srgb, var(--surface) 55%, transparent);
+  color: color-mix(in srgb, var(--accent) 70%, var(--text-muted));
+  font: 500 10px / 1 var(--font-mono);
+  letter-spacing: 0;
+  transition:
+    background-color var(--t-controls-hover-press),
+    border-color var(--t-controls-hover-press),
+    color var(--t-controls-hover-press);
+}
+
+.cmd-mode.is-actions {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.cmd-mode.is-actions:hover {
+  background: var(--accent-hover);
+}
+
+.cmd-mode.is-actions .cmd-mode-kbd {
+  border-color: color-mix(in srgb, var(--on-accent) 38%, transparent);
+  background: color-mix(in srgb, var(--on-accent) 14%, transparent);
+  color: var(--on-accent);
+}
+
+.cmd.is-actions .cmd-lead {
+  color: var(--accent);
+}
+
+.cmd-divider {
+  flex: none;
+  height: 1px;
+  margin: 0 6px;
+  background: var(--divider);
+}
+
+/* ------------------------------------------------------------------------------------ results */
+
+.cmd-list {
+  position: relative;
+  max-height: min(var(--cmd-list-cap, 100000px), calc(100vh - var(--cmd-input-h) - 1px));
+  padding: 6px 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* The card's 12px bottom band follows the last row. */
+.native-card .cmd-list {
+  padding-bottom: 0;
+}
+
+.cmd-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.cmd-list::-webkit-scrollbar-thumb {
+  border: 0;
+  border-radius: var(--radius-full);
+  background: var(--scrollbar-thumb);
+}
+
+.cmd-group {
+  display: flex;
+  align-items: flex-end;
+  height: var(--cmd-group-h);
+  padding: 0 18px 6px;
+  color: var(--text-muted);
+  font: 600 10.5px / 1 var(--font-small);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.cmd-row + .cmd-group {
+  margin-top: 4px;
+  height: calc(var(--cmd-group-h) - 4px);
+}
+
+/* `commandBar.selection`: the selected row's fill is one layer that the layout effect moves, so the
+ * highlight can glide between rows (keyboard) or snap (hover) without any row restyling. Its position
+ * comes from the selected row's own layout box, so it scrolls with the list. `pointer-events: none`
+ * keeps `.cmd-row` the only hit target the list's handlers ever see. */
+.cmd-glider {
+  position: absolute;
+  top: 0;
+  left: 6px;
+  right: 6px;
+  height: var(--cmd-row-h);
+  border-radius: var(--radius-md);
+  background: var(--accent-soft);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.cmd-glider::before {
+  content: "";
+  position: absolute;
+  top: 12px;
+  bottom: 12px;
+  left: 0;
+  width: 3px;
+  border-radius: 0 var(--radius-full) var(--radius-full) 0;
+  background: var(--accent);
+}
+
+/* Rows are rounded and inset from the bar's edges; the selected one is marked by the glider above. */
+.cmd-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: var(--cmd-row-h);
+  margin: 0 6px;
+  padding: 0 8px 0 14px;
+  border-radius: var(--radius-md);
+}
+
+.native-card .cmd-row {
+  padding-left: 10px;
+}
+
+.native-card .cmd-group {
+  padding: 0 14px 6px;
+}
+
+.cmd-icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  color: var(--text-muted);
+}
+
+.cmd-row.is-selected .cmd-icon {
+  color: color-mix(in srgb, var(--accent) 80%, var(--text));
+}
+
+/* White monochrome favicons (picked for the OS dark mode) vanish on a light surface, dark ones on a
+ * dark surface: a faint contour keeps them legible. */
+:root[data-theme="light"] .cmd-icon img.favicon {
+  filter: drop-shadow(0 0 0.6px rgba(0, 0, 0, 0.4));
+}
+
+:root[data-theme="dark"] .cmd-icon img.favicon {
+  filter: drop-shadow(0 0 0.6px rgba(255, 255, 255, 0.5));
+}
+
+.cmd-emoji {
+  font-size: 15px;
+  line-height: 16px;
+}
+
+.cmd-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1px;
+  min-width: 0;
+}
+
+.cmd-title,
+.cmd-sub {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.cmd-title {
+  color: var(--text);
+  font-size: var(--fs-cmd-title);
+  line-height: 18px;
+}
+
+.cmd-row[data-group="go"] .cmd-title,
+.cmd-row[data-group="topHit"] .cmd-title {
+  font-weight: 500;
+}
+
+.cmd-sub {
+  color: var(--text-muted);
+  font-size: var(--fs-cmd-sub);
+  line-height: 15px;
+}
+
+.cmd-hl {
+  background: none;
+  color: inherit;
+  font-weight: 600;
+}
+
+/* Search suggestions (and the default row while it completes one), like Chrome: the typed part
+ * in normal weight, what the suggestion adds emphasized. */
+.cmd-row.is-search .cmd-title {
+  font-weight: 400;
+}
+
+.cmd-row.is-search .cmd-em {
+  font-weight: 600;
+}
+
+.cmd-hint {
+  display: flex;
+  flex: none;
+  align-items: center;
+  margin-left: 8px;
+}
+
+.cmd-chip {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 7px;
+  border-radius: var(--radius-sm);
+  color: var(--text-faint);
+  font: 11px / 1 var(--font-mono);
+  white-space: nowrap;
+  transition: background-color var(--t-controls-hover-press), color var(--t-controls-hover-press);
+}
+
+.cmd-kbd {
+  opacity: 0.75;
+}
+
+.cmd-kbd .kbd {
+  height: 20px;
+  min-width: 20px;
+  border-radius: var(--radius-sm);
+}
+
+.cmd-row.is-selected .cmd-kbd {
+  opacity: 1;
+}
+
+.cmd-row.is-selected .cmd-chip,
+.cmd-row.is-selected .cmd-kbd .kbd {
+  background: color-mix(in srgb, var(--accent) 16%, var(--surface));
+  color: var(--text);
+}
+
+.cmd-empty {
+  display: flex;
+  align-items: center;
+  height: var(--cmd-row-h);
+  padding: 0 20px;
+  color: var(--text-muted);
+}
+
+.native-card .cmd-empty {
+  padding: 0 16px;
+}
+
+/* Extensions mode (Ctrl+E): the mode chip is a label, not a toggle — there is no Tab affordance,
+ * because "back to search" is not where Ctrl+E came from. */
+/* `commandBar.modeToggle`: a native `::placeholder` cannot be animated from script and there is only
+ * ever one of them, so it fades in on its own instead of crossfading. Two identical keyframe sets
+ * under two attribute values are what restarts it: `command.js` flips `data-ph` on every mode change,
+ * which is a keyed diff, not a render. */
+@keyframes cmd-placeholder-a {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes cmd-placeholder-b {
+  from {
+    opacity: 0;
+  }
+}
+
+.cmd-input[data-ph="a"]::placeholder {
+  animation: cmd-placeholder-a var(--t-command-bar-mode-toggle) var(--ease-out);
+}
+
+.cmd-input[data-ph="b"]::placeholder {
+  animation: cmd-placeholder-b var(--t-command-bar-mode-toggle) var(--ease-out);
+}
+
+.cmd-mode.is-static {
+  padding: 0 9px;
+  cursor: default;
+}
+
+.cmd.is-extensions .cmd-lead {
+  color: var(--accent);
+}

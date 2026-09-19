@@ -1,0 +1,105 @@
+/* Extension popup card header: a 40px strip on --surface above the extension's own page. Inside sta
+ * the shell's rounded card surrounds both (html.native-card), so the strip loses its own padding.
+ * A failed popup gets one extra line and is the whole card. */
+
+html,
+body {
+  overflow: hidden;
+}
+
+.xp {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  height: 40px;
+  padding: 0 8px;
+}
+
+.native-card .xp {
+  padding: 0;
+}
+
+.xp.is-failed {
+  height: auto;
+  gap: 2px;
+}
+
+.xp-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  height: 28px;
+}
+
+.xp-icon {
+  display: flex;
+  flex: none;
+  align-items: center;
+}
+
+.xp-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font: 600 12.5px / 1.2 var(--font-ui);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.xp-actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+}
+
+.xp-btn {
+  color: var(--text-muted);
+}
+
+.xp-btn:hover:not(:disabled) {
+  color: var(--text);
+}
+
+.xp-link {
+  height: 22px;
+  padding: 0 7px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  font: 500 11.5px / 1 var(--font-ui);
+  cursor: pointer;
+}
+
+.xp-link:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.xp-failed {
+  margin: 0 0 4px;
+  color: var(--text-muted);
+  font: 400 12px / 1.45 var(--font-ui);
+}
+
+/* An extension that asks for the current tab: sta cannot give a popup one (D1a), so the header says
+ * so whatever the page paints. Without it a popup that fails for exactly that reason showed only
+ * *its own* error page and nothing from sta. A chip, not a line: the strip keeps its 40px. */
+.xp-limited {
+  flex: none;
+  max-width: 45%;
+  overflow: hidden;
+  padding: 0 6px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--radius-xs);
+  background: var(--chip-bg);
+  color: var(--text-muted);
+  font: 500 var(--fs-caption) / 1 var(--font-small);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}

@@ -1,0 +1,36 @@
+[package]
+name = "sta-mcp"
+description = "MCP server (stdio) that lets AI agents use the sta browser through its local agent channel."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[[bin]]
+name = "sta-mcp"
+path = "src/main.rs"
+
+[features]
+default = []
+# Serves the debug-only test surface (docs/TESTING.md) to an armed browser, and `--test-tools`.
+# Never a default feature; a release build that enables it fails to compile (see `sta`).
+test-hooks = ["sta-core/test-hooks"]
+
+[dependencies]
+sta-core.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+# The official Rust MCP SDK, pinned: the 2026-07-28 spec support is still marked beta upstream.
+rmcp = { version = "=3.4.0", default-features = false, features = ["server", "transport-io"] }
+tokio = { version = "1.50", features = ["rt", "macros", "io-std", "io-util", "net", "time", "sync"] }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { workspace = true, features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_Security_Authorization",
+    "Win32_Storage_Packaging_Appx",
+    "Win32_System_Pipes",
+    "Win32_System_RemoteDesktop",
+    "Win32_System_Threading",
+] }

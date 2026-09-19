@@ -1,0 +1,189 @@
+name: Release
+
+# A `vX.Y.Z` tag builds the browser, packages it and leaves a **draft** release holding the
+# archives and `latest.json`. Nothing updates until a person publishes that draft: the in-app
+# updater reads `releases/latest/download/latest.json`, and GitHub does not serve drafts there
+# (docs/RELEASING.md).
+#
+#   git tag v0.2.0 && git push origin v0.2.0
+#
+# The tag has to match `[workspace.package] version` in Cargo.toml — the build fails first
+# otherwise, so a release can never claim a version the binaries do not report.
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+      - 'v[0-9]+.[0-9]+.[0-9]+-*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to build (must exist and match Cargo.toml)'
+        required: true
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  # Prebuilt CEF binaries land here (.cargo/config.toml sets the same path for local builds).
+  CEF_PATH: .cef
+
+jobs:
+  build:
+    name: Build ${{ matrix.label }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            label: windows-x64
+            archive: zip
+          # macOS and Linux have no shell yet — `crates/sta/src/platform/` is Win32 throughout
+          # (docs/STATUS.md "Windows only"). When the macOS shell lands, add:
+          #   - os: macos-14
+          #     label: darwin-aarch64
+          #     archive: zip
+          # and give `tools/package-release.mjs` PAYLOAD.darwin its file list. Nothing else here
+          # is Windows-specific: the packaging, hashing, manifest and release steps are shared.
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.label }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 'lts/*'
+
+      - name: The tag and Cargo.toml must agree
+        shell: bash
+        run: |
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          CARGO_VERSION="$(node tools/package-release.mjs version)"
+          if [ "$TAG" != "v$CARGO_VERSION" ]; then
+            echo "::error::tag $TAG does not match [workspace.package] version $CARGO_VERSION in Cargo.toml"
+            exit 1
+          fi
+          echo "version=$CARGO_VERSION" >> "$GITHUB_OUTPUT"
+        id: version
+
+      - name: Build
+        run: cargo build --release -p sta -p sta-mcp
+
+      - name: No test surface in the binaries
+        run: node tools/check-release-clean.mjs
+
+      - name: Stage the archive
+        id: stage
+        run: node tools/package-release.mjs stage --target-dir target/release --out dist
+
+      - name: Archive (zip)
+        shell: bash
+        run: |
+          cd dist
+          if command -v 7z >/dev/null 2>&1; then
+            7z a -tzip -mx=7 "${{ steps.stage.outputs.archive }}" "${{ steps.stage.outputs.name }}" >/dev/null
+          else
+            zip -qr "${{ steps.stage.outputs.archive }}" "${{ steps.stage.outputs.name }}"
+          fi
+          ls -lh "${{ steps.stage.outputs.archive }}"
+
+      - name: Manifest entry for this platform
+        run: node tools/package-release.mjs manifest --archive "dist/${{ steps.stage.outputs.archive }}" --out "dist/latest-${{ matrix.label }}.json"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sta-${{ matrix.label }}
+          path: |
+            dist/${{ steps.stage.outputs.archive }}
+            dist/latest-${{ matrix.label }}.json
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    name: Draft release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 'lts/*'
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Changelog since the previous tag
+        id: changelog
+        shell: bash
+        run: |
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          PREV="$(git tag --sort=-v:refname --list 'v*' | grep -v "^$TAG$" | head -n1)"
+          if [ -n "$PREV" ]; then
+            RANGE="$PREV..$TAG"
+          else
+            RANGE="$TAG"
+          fi
+          {
+            echo 'notes<<CHANGELOG_EOF'
+            git log --no-merges --pretty=format:'- %s' "$RANGE" | head -n 100
+            echo ''
+            echo 'CHANGELOG_EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: One latest.json for every platform that built
+        shell: bash
+        run: |
+          node -e '
+            const fs = require("node:fs");
+            const files = fs.readdirSync("dist").filter((f) => /^latest-.*\.json$/.test(f));
+            if (!files.length) throw new Error("no per-platform manifests were uploaded");
+            const out = { version: "", pubDate: new Date().toISOString(), notes: process.env.NOTES ?? "", platforms: {} };
+            for (const f of files) {
+              const part = JSON.parse(fs.readFileSync(`dist/${f}`, "utf8"));
+              out.version = part.version;
+              Object.assign(out.platforms, part.platforms);
+              fs.rmSync(`dist/${f}`);
+            }
+            fs.writeFileSync("dist/latest.json", JSON.stringify(out, null, 2) + "\n");
+            console.log("latest.json:", out.version, Object.keys(out.platforms).join(", "));
+          '
+        env:
+          NOTES: ${{ steps.changelog.outputs.notes }}
+
+      - name: Draft release with the archives
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.tag || github.ref_name }}
+          name: sta ${{ github.event.inputs.tag || github.ref_name }}
+          draft: true
+          prerelease: ${{ contains(github.event.inputs.tag || github.ref_name, '-') }}
+          fail_on_unmatched_files: true
+          files: |
+            dist/*.zip
+            dist/latest.json
+          body: |
+            ${{ steps.changelog.outputs.notes }}
+
+            ---
+
+            **Install**: download the archive for your platform, unpack it anywhere and run `sta.exe`.
+            There is no installer yet, and the build is not code-signed — SmartScreen will ask once.
+
+            **Updating**: sta checks this release a few seconds after it starts and offers the new
+            version (Settings › About). Publishing this draft is what makes that happen — while it
+            stays a draft, nobody is offered it.

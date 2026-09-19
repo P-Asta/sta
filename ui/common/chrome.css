@@ -1,0 +1,220 @@
+/* Shared browser-chrome styles (sidebar + top bar): navigation buttons and the URL pill.
+ * Requires tokens.css and base.css. Used by /common/chrome.js. */
+
+.nav-buttons {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.nav-buttons .icon-btn:disabled {
+  opacity: 0.32;
+}
+
+/* ------------------------------------------------------------------------------------ URL pill */
+
+.url-pill {
+  --pill-bg: color-mix(in srgb, var(--active-row) 58%, transparent);
+  --pill-bg-hover: color-mix(in srgb, var(--active-row) 82%, transparent);
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  height: var(--url-pill-h);
+  border-radius: var(--url-pill-radius);
+  background: var(--pill-bg);
+  overflow: hidden;
+  transition: background-color var(--t-controls-hover-press);
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
+:root[data-theme="dark"] .url-pill,
+.theme-scope[data-theme="dark"] .url-pill {
+  --pill-bg: color-mix(in srgb, var(--active-row) 62%, transparent);
+  --pill-bg-hover: var(--active-row);
+}
+
+.url-pill:hover,
+.url-pill:focus-within,
+.url-pill.is-engaged {
+  background: var(--pill-bg-hover);
+}
+
+.url-pill.is-compact {
+  height: 30px;
+  border-radius: var(--radius-md);
+}
+
+.url-pill-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  padding: 0 10px 0 11px;
+  border-radius: inherit;
+  color: var(--text);
+  font-size: var(--fs-url-pill);
+  font-weight: var(--fw-url-pill);
+  letter-spacing: 0.005em;
+}
+
+.url-pill-main:focus-visible {
+  outline-offset: -2px;
+}
+
+.url-pill.is-empty .url-pill-main {
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.url-pill.is-compact .url-pill-main {
+  justify-content: center;
+  padding: 0 34px;
+}
+
+.url-pill.is-compact.is-empty .url-pill-main {
+  padding: 0 12px;
+}
+
+.url-pill-glyph {
+  display: grid;
+  place-items: center;
+  flex: none;
+  color: var(--text-muted);
+}
+
+.url-pill-glyph.tone-accent {
+  color: var(--accent);
+}
+
+.url-pill-glyph.tone-warning {
+  color: var(--warning);
+}
+
+.url-pill-text {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* Hover actions float over the right end of the pill; the text fades out underneath them. */
+.url-pill-actions {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  padding: 0 6px 0 18px;
+  pointer-events: none;
+}
+
+.url-pill-actions > .icon-btn {
+  pointer-events: auto;
+  color: var(--text-muted);
+  opacity: 0;
+  transition: opacity var(--t-controls-hover-press), background-color var(--t-controls-hover-press), color var(--t-controls-hover-press);
+}
+
+.url-pill-actions > .icon-btn:hover {
+  color: var(--text);
+}
+
+.url-pill:hover .url-pill-actions > .icon-btn,
+.url-pill:focus-within .url-pill-actions > .icon-btn,
+.url-pill.is-engaged .url-pill-actions > .icon-btn,
+.url-pill-actions > .url-pill-boost.is-on {
+  opacity: 1;
+}
+
+.url-pill:hover .url-pill-main,
+.url-pill:focus-within .url-pill-main,
+.url-pill.is-engaged .url-pill-main {
+  -webkit-mask-image: linear-gradient(to left, transparent 0, transparent calc(58px + var(--pill-zoom, 0px)), #000 calc(78px + var(--pill-zoom, 0px)));
+  mask-image: linear-gradient(to left, transparent 0, transparent calc(58px + var(--pill-zoom, 0px)), #000 calc(78px + var(--pill-zoom, 0px)));
+}
+
+.url-pill.is-compact:hover .url-pill-main,
+.url-pill.is-compact:focus-within .url-pill-main {
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+
+.url-pill-boost.is-on {
+  color: var(--accent) !important;
+}
+
+/* Zoom level other than 100%: an always-visible chip; click resets. */
+.url-pill-zoom {
+  flex: none;
+  height: 20px;
+  margin-right: 3px;
+  padding: 0 6px;
+  border-radius: var(--radius-sm);
+  background: var(--chip-bg);
+  color: var(--text-muted);
+  font: 600 11px / 20px var(--font-small);
+  font-variant-numeric: tabular-nums;
+  pointer-events: auto;
+  transition: background-color var(--t-controls-hover-press), color var(--t-controls-hover-press);
+}
+
+.url-pill-zoom:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.url-pill-zoom:focus-visible {
+  outline-offset: -1px;
+}
+
+/* With the zoom chip showing, the hover-only buttons take no room until the pill is hovered, so
+ * the chip sits at the right end instead of next to empty slots. */
+.url-pill.has-zoom:not(:hover):not(:focus-within):not(.is-engaged) .url-pill-actions > .icon-btn:not(.is-on) {
+  width: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* Room for the always-visible chips (symmetric in the centered top-bar pill). */
+.url-pill:not(.is-compact) .url-pill-main {
+  padding-right: calc(10px + var(--pill-reserve, 0px));
+}
+
+.url-pill.is-compact:not(.is-empty) .url-pill-main {
+  padding: 0 max(34px, calc(12px + var(--pill-reserve, 0px)));
+}
+
+.url-pill-copy.is-done {
+  color: var(--success) !important;
+  opacity: 1 !important;
+}
+
+.url-pill-progress {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  pointer-events: none;
+  /* `sidebar.urlPill`. The 160ms delay is not an animation: it holds the finished bar on screen long
+   * enough to be seen, so it survives every motion level (only durations are zeroed). */
+  transition: opacity var(--t-sidebar-url-pill) linear 160ms;
+}
+
+.url-pill-progress.is-done {
+  opacity: 0;
+}
+
+.url-pill-progress-fill {
+  position: absolute;
+  inset: 0;
+  background: var(--accent);
+  transform-origin: left center;
+  transition: transform var(--t-sidebar-url-pill) var(--ease-out);
+}

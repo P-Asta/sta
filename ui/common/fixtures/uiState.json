@@ -1,0 +1,995 @@
+{
+  "revision": 170,
+  "archiveRevision": 5,
+  "historyRevision": 63,
+  "dark": false,
+  "window": {
+    "maximized": false,
+    "fullscreen": false,
+    "focused": true,
+    "sidebarVisible": true,
+    "sidebarWidth": 248
+  },
+  "activeSpace": 15,
+  "spaces": [
+    {
+      "id": 1,
+      "name": "Personal",
+      "icon": "🏠",
+      "theme": {
+        "hue": 300.0,
+        "hue2": 340.0,
+        "chroma": 0.06
+      },
+      "colors": {
+        "frame": "#f4d4f6",
+        "gradientStart": "#eee0ff",
+        "gradientEnd": "#f7cce7",
+        "accent": "#8962c5",
+        "text": "#1c1b20",
+        "textMuted": "rgba(28,27,32,0.62)",
+        "hover": "rgba(0,0,0,0.05)",
+        "pressed": "rgba(0,0,0,0.09)",
+        "activeRow": "rgba(255,255,255,0.78)",
+        "divider": "rgba(0,0,0,0.08)",
+        "surface": "#ffffff",
+        "border": "rgba(0,0,0,0.10)"
+      },
+      "pinned": [
+        {
+          "kind": "tab",
+          "id": 2,
+          "title": "Online Banking",
+          "url": "https://bank.example.com/login",
+          "host": "bank.example.com",
+          "favicon": null,
+          "section": "pinned",
+          "space": 1,
+          "loaded": false,
+          "loading": false,
+          "audible": false,
+          "muted": false,
+          "crashed": false,
+          "failed": false,
+          "navigated": false,
+          "pinnedUrl": "https://bank.example.com/login",
+          "active": false,
+          "visible": false
+        }
+      ],
+      "today": [
+        {
+          "kind": "tab",
+          "id": 5,
+          "title": "Your Orders",
+          "url": "https://www.amazon.com/gp/your-account/order-history",
+          "host": "amazon.com",
+          "favicon": null,
+          "section": "today",
+          "space": 1,
+          "loaded": true,
+          "loading": false,
+          "audible": false,
+          "muted": false,
+          "crashed": false,
+          "failed": false,
+          "navigated": false,
+          "pinnedUrl": null,
+          "active": false,
+          "visible": false
+        },
+        {
+          "kind": "tab",
+          "id": 4,
+          "title": "The Food Lab | Serious Eats",
+          "url": "https://www.seriouseats.com/the-food-lab",
+          "host": "seriouseats.com",
+          "favicon": null,
+          "section": "today",
+          "space": 1,
+          "loaded": false,
+          "loading": false,
+          "audible": false,
+          "muted": false,
+          "crashed": false,
+          "failed": false,
+          "navigated": false,
+          "pinnedUrl": null,
+          "active": false,
+          "visible": false
+        }
+      ],
+      "activeItem": 5
+    },
+    {
+      "id": 8,
+      "name": "Play",
+      "icon": "🎮",
+      "theme": {
+        "hue": 50.0,
+        "hue2": 20.0,
+        "chroma": 0.07
+      },
+      "colors": {
+        "frame": "#ffd0c4",
+        "gradientStart": "#ffdbbf",
+        "gradientEnd": "#ffc9c8",
+        "accent": "#be5a0a",
+        "text": "#1c1b20",
+        "textMuted": "rgba(28,27,32,0.62)",
+        "hover": "rgba(0,0,0,0.05)",
+        "pressed": "rgba(0,0,0,0.09)",
+        "activeRow": "rgba(255,255,255,0.78)",
+        "divider": "rgba(0,0,0,0.08)",
+        "surface": "#ffffff",
+        "border": "rgba(0,0,0,0.10)"
+      },
+      "pinned": [],
+      "today": [
+        {
+          "kind": "tab",
+          "id": 11,
+          "title": "Browse - Twitch",
+          "url": "https://www.twitch.tv/directory",
+          "host": "twitch.tv",
+          "favicon": null,
+          "section": "today",
+          "space": 8,
+          "loaded": true,
+          "loading": false,
+          "audible": false,
+          "muted": false,
+          "crashed": false,
+          "failed": false,
+          "navigated": false,
+          "pinnedUrl": null,
+          "active": false,
+          "visible": false
+        },
+        {
+          "kind": "tab",
+          "id": 9,
+          "title": "Welcome to Steam",
+          "url": "https://store.steampowered.com/",
+          "host": "store.steampowered.com",
+          "favicon": null,
+          "section": "today",
+          "space": 8,
+          "loaded": false,
+          "loading": false,
+          "audible": false,
+          "muted": false,
+          "crashed": false,
+          "failed": false,
+          "navigated": false,
+          "pinnedUrl": null,
+          "active": false,
+          "visible": false
+        }
+      ],
+      "activeItem": 11
+    },
+    {
+      "id": 15,
+      "name": "Work",
+      "icon": "🚀",
+      "theme": {
+        "hue": 190.0,
+        "hue2": 230.0,
+        "chroma": 0.06
+      },
+      "colors": {
+        "frame": "#b6eaf7",
+        "gradientStart": "#baf5f1",
+        "gradientEnd": "#b3e3fb",
+        "accent": "#00948e",
+        "text": "#1c1b20",
+        "textMuted": "rgba(28,27,32,0.62)",
+        "hover": "rgba(0,0,0,0.05)",
+        "pressed": "rgba(0,0,0,0.09)",
+        "activeRow": "rgba(255,255,255,0.78)",
+        "divider": "rgba(0,0,0,0.08)",
+        "surface": "#ffffff",
+        "border": "rgba(0,0,0,0.10)"
+      },
+      "pinned": [
+        {
+          "kind": "folder",
+          "id": 22,
+          "name": "Projects",
+          "collapsed": false,
+          "children": [
+            {
+              "kind": "folder",
+              "id": 24,
+              "name": "Specs",
+              "collapsed": false,
+              "children": [
+                {
+                  "kind": "tab",
+                  "id": 25,
+                  "title": "sta – Product spec - Google Docs",
+                  "url": "https://docs.google.com/document/d/1StaSpec/edit",
+                  "host": "docs.google.com",
+                  "favicon": null,
+                  "section": "pinned",
+                  "space": 15,
+                  "loaded": false,
+                  "loading": false,
+                  "audible": false,
+                  "muted": false,
+                  "crashed": false,
+                  "failed": false,
+                  "navigated": false,
+                  "pinnedUrl": "https://docs.google.com/document/d/1StaSpec/edit",
+                  "active": false,
+                  "visible": false
+                }
+              ]
+            },
+            {
+              "kind": "tab",
+              "id": 23,
+              "title": "Active issues › sta › Linear",
+              "url": "https://linear.app/sta/team/AST/active",
+              "host": "linear.app",
+              "favicon": null,
+              "section": "pinned",
+              "space": 15,
+              "loaded": true,
+              "loading": false,
+              "audible": false,
+              "muted": false,
+              "crashed": false,
+              "failed": false,
+              "navigated": false,
+              "pinnedUrl": "https://linear.app/sta/team/AST/active",
+              "active": false,
+              "visible": false
+            }
+          ]
+        },
+        {
+          "kind": "tab",
+          "id": 26,
+          "title": "Keep split fractions on restore by p-asta · Pull Request #42",
+          "url": "https://github.com/sta/sta/pull/42",
+          "host": "github.com",
+          "favicon": null,
+          "section": "pinned",
+          "space": 15,
+          "loaded": true,
+          "loading": false,
+          "audible": false,
+          "muted": false,
+          "crashed": false,
+          "failed": false,
+          "navigated": true,
+          "pinnedUrl": "https://github.com/pulls",
+          "active": false,
+          "visible": false
+        },
+        {
+          "kind": "tab",
+          "id": 27,
+          "title": "general (Channel) - sta - Slack",
+          "url": "https://app.slack.com/client/T0STA/C0GENERAL",
+          "host": "app.slack.com",
+          "favicon": null,
+          "section": "pinned",
+          "space": 15,
+          "loaded": false,
+          "loading": false,
+          "audible": false,
+          "muted": false,
+          "crashed": false,
+          "failed": false,
+          "navigated": false,
+          "pinnedUrl": "https://app.slack.com/client/T0STA/C0GENERAL",
+          "active": false,
+          "visible": false
+        }
+      ],
+      "today": [
+        {
+          "kind": "split",
+          "id": 37,
+          "orientation": "horizontal",
+          "panes": [
+            {
+              "id": 35,
+              "title": "serde - Rust",
+              "url": "https://docs.rs/serde/latest/serde/",
+              "host": "docs.rs",
+              "favicon": null,
+              "section": "today",
+              "space": 15,
+              "loaded": true,
+              "loading": false,
+              "audible": false,
+              "muted": false,
+              "crashed": false,
+              "failed": false,
+              "navigated": false,
+              "pinnedUrl": null,
+              "active": false,
+              "visible": true
+            },
+            {
+              "id": 36,
+              "title": "RefCell in std::cell - Rust",
+              "url": "https://doc.rust-lang.org/std/cell/struct.RefCell.html",
+              "host": "doc.rust-lang.org",
+              "favicon": null,
+              "section": "today",
+              "space": 15,
+              "loaded": true,
+              "loading": false,
+              "audible": false,
+              "muted": false,
+              "crashed": false,
+              "failed": false,
+              "navigated": false,
+              "pinnedUrl": null,
+              "active": true,
+              "visible": true
+            }
+          ],
+          "fractions": [
+            0.55,
+            0.45
+          ],
+          "focused": 1,
+          "active": true
+        },
+        {
+          "kind": "tab",
+          "id": 34,
+          "title": "sta UI – Figma",
+          "url": "https://www.figma.com/design/k3ySta/sta-UI",
+          "host": "figma.com",
+          "favicon": null,
+          "section": "today",
+          "space": 15,
+          "loaded": true,
+          "loading": false,
+          "audible": false,
+          "muted": true,
+          "crashed": false,
+          "failed": false,
+          "navigated": false,
+          "pinnedUrl": null,
+          "active": false,
+          "visible": false
+        },
+        {
+          "kind": "tab",
+          "id": 33,
+          "title": "rust - RefCell<T> already borrowed panic - Stack Overflow",
+          "url": "https://stackoverflow.com/questions/47437376/refcell-already-borrowed",
+          "host": "stackoverflow.com",
+          "favicon": null,
+          "section": "today",
+          "space": 15,
+          "loaded": true,
+          "loading": true,
+          "audible": false,
+          "muted": false,
+          "crashed": false,
+          "failed": false,
+          "navigated": false,
+          "pinnedUrl": null,
+          "active": false,
+          "visible": false
+        },
+        {
+          "kind": "tab",
+          "id": 32,
+          "title": "lofi hip hop radio 📚 beats to relax/study to - YouTube",
+          "url": "https://www.youtube.com/watch?v=jfKfPfyJRdk",
+          "host": "youtube.com",
+          "favicon": null,
+          "section": "today",
+          "space": 15,
+          "loaded": true,
+          "loading": false,
+          "audible": true,
+          "muted": false,
+          "crashed": false,
+          "failed": false,
+          "navigated": false,
+          "pinnedUrl": null,
+          "active": false,
+          "visible": false
+        },
+        {
+          "kind": "tab",
+          "id": 31,
+          "title": "cef views overlay - Google Search",
+          "url": "https://www.google.com/search?q=cef+views+overlay",
+          "host": "google.com",
+          "favicon": null,
+          "section": "today",
+          "space": 15,
+          "loaded": true,
+          "loading": false,
+          "audible": false,
+          "muted": false,
+          "crashed": true,
+          "failed": false,
+          "navigated": false,
+          "pinnedUrl": null,
+          "active": false,
+          "visible": false
+        },
+        {
+          "kind": "tab",
+          "id": 30,
+          "title": "oklch() - CSS: Cascading Style Sheets | MDN",
+          "url": "https://developer.mozilla.org/en-US/docs/Web/CSS/color_value/oklch",
+          "host": "developer.mozilla.org",
+          "favicon": "https://developer.mozilla.org/favicon-48x48.png",
+          "section": "today",
+          "space": 15,
+          "loaded": true,
+          "loading": false,
+          "audible": false,
+          "muted": false,
+          "crashed": false,
+          "failed": true,
+          "navigated": false,
+          "pinnedUrl": null,
+          "active": false,
+          "visible": false
+        },
+        {
+          "kind": "tab",
+          "id": 29,
+          "title": "Hacker News",
+          "url": "https://news.ycombinator.com/",
+          "host": "news.ycombinator.com",
+          "favicon": null,
+          "section": "today",
+          "space": 15,
+          "loaded": false,
+          "loading": false,
+          "audible": false,
+          "muted": false,
+          "crashed": false,
+          "failed": false,
+          "navigated": false,
+          "pinnedUrl": null,
+          "active": false,
+          "visible": false
+        },
+        {
+          "kind": "tab",
+          "id": 28,
+          "title": "Chromium Embedded Framework - Wikipedia",
+          "url": "https://en.wikipedia.org/wiki/Chromium_Embedded_Framework",
+          "host": "en.wikipedia.org",
+          "favicon": null,
+          "section": "today",
+          "space": 15,
+          "loaded": false,
+          "loading": false,
+          "audible": false,
+          "muted": false,
+          "crashed": false,
+          "failed": false,
+          "navigated": false,
+          "pinnedUrl": null,
+          "active": false,
+          "visible": false
+        }
+      ],
+      "activeItem": 37
+    }
+  ],
+  "favorites": [
+    {
+      "id": 16,
+      "title": "Inbox (3) - me@example.com - Gmail",
+      "url": "https://mail.google.com/mail/u/0/#inbox",
+      "host": "mail.google.com",
+      "favicon": "https://ssl.gstatic.com/ui/v1/icons/mail/rfr/gmail.ico",
+      "section": "favorites",
+      "space": null,
+      "loaded": true,
+      "loading": false,
+      "audible": false,
+      "muted": false,
+      "crashed": false,
+      "failed": false,
+      "navigated": false,
+      "pinnedUrl": "https://mail.google.com/mail/u/0/#inbox",
+      "active": false,
+      "visible": false
+    },
+    {
+      "id": 17,
+      "title": "Google Calendar - Week of September 14, 2026",
+      "url": "https://calendar.google.com/calendar/u/0/r/week",
+      "host": "calendar.google.com",
+      "favicon": null,
+      "section": "favorites",
+      "space": null,
+      "loaded": false,
+      "loading": false,
+      "audible": false,
+      "muted": false,
+      "crashed": false,
+      "failed": false,
+      "navigated": false,
+      "pinnedUrl": "https://calendar.google.com/calendar/u/0/r/week",
+      "active": false,
+      "visible": false
+    },
+    {
+      "id": 18,
+      "title": "GitHub",
+      "url": "https://github.com/",
+      "host": "github.com",
+      "favicon": "https://github.githubassets.com/favicons/favicon.svg",
+      "section": "favorites",
+      "space": null,
+      "loaded": true,
+      "loading": false,
+      "audible": false,
+      "muted": false,
+      "crashed": false,
+      "failed": false,
+      "navigated": false,
+      "pinnedUrl": "https://github.com/",
+      "active": false,
+      "visible": false
+    },
+    {
+      "id": 19,
+      "title": "YouTube",
+      "url": "https://www.youtube.com/",
+      "host": "youtube.com",
+      "favicon": null,
+      "section": "favorites",
+      "space": null,
+      "loaded": true,
+      "loading": false,
+      "audible": false,
+      "muted": false,
+      "crashed": false,
+      "failed": false,
+      "navigated": false,
+      "pinnedUrl": "https://www.youtube.com/",
+      "active": false,
+      "visible": false
+    },
+    {
+      "id": 20,
+      "title": "Recents – Figma",
+      "url": "https://www.figma.com/files/recents",
+      "host": "figma.com",
+      "favicon": null,
+      "section": "favorites",
+      "space": null,
+      "loaded": false,
+      "loading": false,
+      "audible": false,
+      "muted": false,
+      "crashed": false,
+      "failed": false,
+      "navigated": false,
+      "pinnedUrl": "https://www.figma.com/files/recents",
+      "active": false,
+      "visible": false
+    },
+    {
+      "id": 21,
+      "title": "Roadmap",
+      "url": "https://www.notion.so/sta/Roadmap",
+      "host": "notion.so",
+      "favicon": null,
+      "section": "favorites",
+      "space": null,
+      "loaded": false,
+      "loading": false,
+      "audible": false,
+      "muted": false,
+      "crashed": false,
+      "failed": false,
+      "navigated": false,
+      "pinnedUrl": "https://www.notion.so/sta/Roadmap",
+      "active": false,
+      "visible": false
+    }
+  ],
+  "favoritesFull": false,
+  "activeItem": 37,
+  "focusedTab": 36,
+  "current": {
+    "tab": 36,
+    "url": "https://doc.rust-lang.org/std/cell/struct.RefCell.html",
+    "title": "RefCell in std::cell - Rust",
+    "host": "doc.rust-lang.org",
+    "pill": "doc.rust-lang.org",
+    "secure": true,
+    "internal": false,
+    "loading": false,
+    "progress": 0.0,
+    "canGoBack": true,
+    "canGoForward": false,
+    "section": "today",
+    "navigated": false,
+    "zoomPercent": 100,
+    "boosts": [],
+    "muted": false,
+    "audible": false,
+    "loadError": null,
+    "splitPanes": 2
+  },
+  "peek": null,
+  "downloads": [
+    {
+      "id": 6,
+      "tab": 36,
+      "url": "https://downloads.example.com/sta-spec.pdf",
+      "fileName": "sta-spec.pdf",
+      "path": "C:\\Users\\me\\Downloads\\sta-spec.pdf",
+      "receivedBytes": 12897485,
+      "totalBytes": 41943040,
+      "bytesPerSec": 1258291,
+      "state": "inProgress",
+      "startedAt": 1789341570000
+    },
+    {
+      "id": 5,
+      "tab": 36,
+      "url": "https://downloads.example.com/node-v22-x64.msi",
+      "fileName": "node-v22-x64.msi",
+      "path": "C:\\Users\\me\\Downloads\\node-v22-x64.msi",
+      "receivedBytes": 18350080,
+      "totalBytes": null,
+      "bytesPerSec": 2202009,
+      "state": "inProgress",
+      "startedAt": 1789341510000
+    },
+    {
+      "id": 4,
+      "tab": 35,
+      "url": "https://downloads.example.com/fonts-bundle.zip",
+      "fileName": "fonts-bundle.zip",
+      "path": "C:\\Users\\me\\Downloads\\fonts-bundle.zip",
+      "receivedBytes": 22020096,
+      "totalBytes": 52428800,
+      "bytesPerSec": 0,
+      "state": "paused",
+      "startedAt": 1789340400000
+    },
+    {
+      "id": 3,
+      "tab": null,
+      "url": "https://downloads.example.com/old-build.zip",
+      "fileName": "old-build.zip",
+      "path": "C:\\Users\\me\\Downloads\\old-build.zip",
+      "receivedBytes": 1048576,
+      "totalBytes": 73741824,
+      "bytesPerSec": 0,
+      "state": "cancelled",
+      "startedAt": 1789338600000
+    },
+    {
+      "id": 2,
+      "tab": null,
+      "url": "https://downloads.example.com/cef_binary_152_windows64.tar.bz2",
+      "fileName": "cef_binary_152_windows64.tar.bz2",
+      "path": "C:\\Users\\me\\Downloads\\cef_binary_152_windows64.tar.bz2",
+      "receivedBytes": 96432128,
+      "totalBytes": 412876800,
+      "bytesPerSec": 0,
+      "state": "interrupted",
+      "startedAt": 1789338000000
+    },
+    {
+      "id": 1,
+      "tab": 18,
+      "url": "https://downloads.example.com/rustup-init.exe",
+      "fileName": "rustup-init.exe",
+      "path": "C:\\Users\\me\\Downloads\\rustup-init.exe",
+      "receivedBytes": 7874560,
+      "totalBytes": 7874560,
+      "bytesPerSec": 0,
+      "state": "complete",
+      "startedAt": 1789334400000
+    }
+  ],
+  "canReopen": true,
+  "archiveCount": 6,
+  "switcher": null,
+  "commandBar": {
+    "mode": "newTab",
+    "text": "",
+    "splitSide": null,
+    "seq": 3
+  },
+  "find": null,
+  "toast": null,
+  "sidebarPanel": null,
+  "permissionPrompts": [],
+  "pageFullscreen": false,
+  "motion": {
+    "level": "full",
+    "off": [],
+    "systemAnimations": true
+  },
+  "settings": {
+    "searchEngine": "google",
+    "customSearchUrl": "",
+    "archiveAfterHours": 24,
+    "appearance": "system",
+    "startup": "restoreSession",
+    "peekEnabled": true,
+    "downloadDir": null,
+    "askDownloadLocation": false,
+    "searchSuggestions": true,
+    "animations": {
+      "enabled": true,
+      "followSystem": true,
+      "groups": {},
+      "choices": {}
+    },
+    "agentAccess": "off",
+    "agentScope": "agentTabs",
+    "agentSites": "ask",
+    "agentScripts": "off",
+    "agentHistory": false,
+    "agentDownloads": false,
+    "agentAllowPrivateNetwork": false,
+    "agentBlockedHosts": [],
+    "agentAllowedSites": [],
+    "agentTrustedClients": []
+  },
+  "boosts": [
+    {
+      "id": 38,
+      "name": "GitHub wide",
+      "host": "github.com",
+      "enabled": true
+    }
+  ],
+  "searchEngines": [
+    {
+      "id": "google",
+      "name": "Google",
+      "url": "https://www.google.com/search?q={q}"
+    },
+    {
+      "id": "bing",
+      "name": "Bing",
+      "url": "https://www.bing.com/search?q={q}"
+    },
+    {
+      "id": "duckDuckGo",
+      "name": "DuckDuckGo",
+      "url": "https://duckduckgo.com/?q={q}"
+    },
+    {
+      "id": "ecosia",
+      "name": "Ecosia",
+      "url": "https://www.ecosia.org/search?q={q}"
+    },
+    {
+      "id": "brave",
+      "name": "Brave Search",
+      "url": "https://search.brave.com/search?q={q}"
+    },
+    {
+      "id": "kagi",
+      "name": "Kagi",
+      "url": "https://kagi.com/search?q={q}"
+    },
+    {
+      "id": "perplexity",
+      "name": "Perplexity",
+      "url": "https://www.perplexity.ai/search?q={q}"
+    },
+    {
+      "id": "custom",
+      "name": "Custom",
+      "url": ""
+    }
+  ],
+  "themePresets": [
+    {
+      "name": "Dusk",
+      "theme": {
+        "hue": 300.0,
+        "hue2": 340.0,
+        "chroma": 0.06
+      },
+      "colors": {
+        "frame": "#f4d4f6",
+        "gradientStart": "#eee0ff",
+        "gradientEnd": "#f7cce7",
+        "accent": "#8962c5",
+        "text": "#1c1b20",
+        "textMuted": "rgba(28,27,32,0.62)",
+        "hover": "rgba(0,0,0,0.05)",
+        "pressed": "rgba(0,0,0,0.09)",
+        "activeRow": "rgba(255,255,255,0.78)",
+        "divider": "rgba(0,0,0,0.08)",
+        "surface": "#ffffff",
+        "border": "rgba(0,0,0,0.10)"
+      }
+    },
+    {
+      "name": "Lagoon",
+      "theme": {
+        "hue": 190.0,
+        "hue2": 230.0,
+        "chroma": 0.06
+      },
+      "colors": {
+        "frame": "#b6eaf7",
+        "gradientStart": "#baf5f1",
+        "gradientEnd": "#b3e3fb",
+        "accent": "#00948e",
+        "text": "#1c1b20",
+        "textMuted": "rgba(28,27,32,0.62)",
+        "hover": "rgba(0,0,0,0.05)",
+        "pressed": "rgba(0,0,0,0.09)",
+        "activeRow": "rgba(255,255,255,0.78)",
+        "divider": "rgba(0,0,0,0.08)",
+        "surface": "#ffffff",
+        "border": "rgba(0,0,0,0.10)"
+      }
+    },
+    {
+      "name": "Ember",
+      "theme": {
+        "hue": 50.0,
+        "hue2": 20.0,
+        "chroma": 0.07
+      },
+      "colors": {
+        "frame": "#ffd0c4",
+        "gradientStart": "#ffdbbf",
+        "gradientEnd": "#ffc9c8",
+        "accent": "#be5a0a",
+        "text": "#1c1b20",
+        "textMuted": "rgba(28,27,32,0.62)",
+        "hover": "rgba(0,0,0,0.05)",
+        "pressed": "rgba(0,0,0,0.09)",
+        "activeRow": "rgba(255,255,255,0.78)",
+        "divider": "rgba(0,0,0,0.08)",
+        "surface": "#ffffff",
+        "border": "rgba(0,0,0,0.10)"
+      }
+    },
+    {
+      "name": "Moss",
+      "theme": {
+        "hue": 130.0,
+        "hue2": 150.0,
+        "chroma": 0.05
+      },
+      "colors": {
+        "frame": "#cee9cb",
+        "gradientStart": "#ddefcc",
+        "gradientEnd": "#c4e5ca",
+        "accent": "#5c8b11",
+        "text": "#1c1b20",
+        "textMuted": "rgba(28,27,32,0.62)",
+        "hover": "rgba(0,0,0,0.05)",
+        "pressed": "rgba(0,0,0,0.09)",
+        "activeRow": "rgba(255,255,255,0.78)",
+        "divider": "rgba(0,0,0,0.08)",
+        "surface": "#ffffff",
+        "border": "rgba(0,0,0,0.10)"
+      }
+    },
+    {
+      "name": "Slate",
+      "theme": {
+        "hue": 255.0,
+        "hue2": 255.0,
+        "chroma": 0.015
+      },
+      "colors": {
+        "frame": "#d9e1ea",
+        "gradientStart": "#e1e9f2",
+        "gradientEnd": "#d4dbe5",
+        "accent": "#337bd0",
+        "text": "#1c1b20",
+        "textMuted": "rgba(28,27,32,0.62)",
+        "hover": "rgba(0,0,0,0.05)",
+        "pressed": "rgba(0,0,0,0.09)",
+        "activeRow": "rgba(255,255,255,0.78)",
+        "divider": "rgba(0,0,0,0.08)",
+        "surface": "#ffffff",
+        "border": "rgba(0,0,0,0.10)"
+      }
+    },
+    {
+      "name": "Rose",
+      "theme": {
+        "hue": 10.0,
+        "hue2": 350.0,
+        "chroma": 0.06
+      },
+      "colors": {
+        "frame": "#ffd0e0",
+        "gradientStart": "#ffd8df",
+        "gradientEnd": "#fbcbe0",
+        "accent": "#c14d66",
+        "text": "#1c1b20",
+        "textMuted": "rgba(28,27,32,0.62)",
+        "hover": "rgba(0,0,0,0.05)",
+        "pressed": "rgba(0,0,0,0.09)",
+        "activeRow": "rgba(255,255,255,0.78)",
+        "divider": "rgba(0,0,0,0.08)",
+        "surface": "#ffffff",
+        "border": "rgba(0,0,0,0.10)"
+      }
+    },
+    {
+      "name": "Sky",
+      "theme": {
+        "hue": 245.0,
+        "hue2": 275.0,
+        "chroma": 0.06
+      },
+      "colors": {
+        "frame": "#cce1ff",
+        "gradientStart": "#c7edff",
+        "gradientEnd": "#cfd8ff",
+        "accent": "#0080cc",
+        "text": "#1c1b20",
+        "textMuted": "rgba(28,27,32,0.62)",
+        "hover": "rgba(0,0,0,0.05)",
+        "pressed": "rgba(0,0,0,0.09)",
+        "activeRow": "rgba(255,255,255,0.78)",
+        "divider": "rgba(0,0,0,0.08)",
+        "surface": "#ffffff",
+        "border": "rgba(0,0,0,0.10)"
+      }
+    },
+    {
+      "name": "Sand",
+      "theme": {
+        "hue": 80.0,
+        "hue2": 60.0,
+        "chroma": 0.05
+      },
+      "colors": {
+        "frame": "#f7dbbe",
+        "gradientStart": "#fae5c3",
+        "gradientEnd": "#f4d4ba",
+        "accent": "#a86d00",
+        "text": "#1c1b20",
+        "textMuted": "rgba(28,27,32,0.62)",
+        "hover": "rgba(0,0,0,0.05)",
+        "pressed": "rgba(0,0,0,0.09)",
+        "activeRow": "rgba(255,255,255,0.78)",
+        "divider": "rgba(0,0,0,0.08)",
+        "surface": "#ffffff",
+        "border": "rgba(0,0,0,0.10)"
+      }
+    }
+  ],
+  "agent": {
+    "paused": false,
+    "sessions": [],
+    "prompts": [],
+    "activity": [],
+    "heldDownloads": [],
+    "panelOpen": false,
+    "openedTabs": 0
+  },
+  "extensions": {
+    "items": [],
+    "details": [],
+    "busy": null,
+    "popup": null,
+    "safeMode": false,
+    "needsOk": 0
+  }
+}

@@ -1,0 +1,86 @@
+/* AI agents (MCP): the agent color and shared bits of the agent overlay, the topbar chip, the
+ * sidebar glyph and the Settings section (PROTOCOL §9). The native 2 px frame around a tab an agent
+ * acts on uses the same colors (crates/sta/src/automation/frame.rs). */
+
+:root {
+  --agent: #e8641b;
+  /* Text and icons on an --agent fill: dark in both themes (white on the orange is below 4.5:1). */
+  --on-agent: #1c1b20;
+  --agent-soft: color-mix(in srgb, var(--agent) 13%, transparent);
+  --agent-softer: color-mix(in srgb, var(--agent) 7%, transparent);
+  --agent-ring: color-mix(in srgb, var(--agent) 45%, transparent);
+  --verified: #1a7f37;
+  --verified-soft: color-mix(in srgb, var(--verified) 12%, transparent);
+  --unverified: #b35900;
+  --unverified-soft: color-mix(in srgb, var(--unverified) 13%, transparent);
+}
+
+:root[data-theme="dark"] {
+  --agent: #ff9150;
+  --verified: #56d364;
+  --unverified: #f0a04b;
+}
+
+.agent-glyph {
+  display: block;
+  flex: none;
+}
+
+/* The activity pulse: a ring that expands from the glyph while an agent is acting. An activity
+ * indicator, so `indicators.loading` owns it; tokens.css leaves a still ring at `reduced`, at `off`
+ * and when the key is switched off, because "an agent is working" must never simply disappear. */
+@keyframes agent-pulse {
+  0% { transform: scale(0.6); opacity: 0.85; }
+  100% { transform: scale(1.9); opacity: 0; }
+}
+
+.agent-pulse {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+}
+
+.agent-pulse.is-active::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: var(--agent-ring);
+  animation: agent-pulse calc(var(--t-indicators-loading) * 1.375) var(--ease-out) infinite;
+}
+
+.agent-verified,
+.agent-unverified {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 6px 1px 4px;
+  border-radius: var(--radius-xs);
+  font: 600 var(--fs-caption) / 1.4 var(--font-small);
+  white-space: nowrap;
+}
+
+.agent-verified {
+  background: var(--verified-soft);
+  color: var(--verified);
+}
+
+.agent-unverified {
+  background: var(--unverified-soft);
+  color: var(--unverified);
+}
+
+/* Sidebar tab rows: the glyph on tabs in agent scope (opened by or shared with agents). */
+.row-agent {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  margin: 0 -2px 0 2px;
+  color: var(--agent);
+}
+
+.row.tab-row:hover .row-agent {
+  display: none;
+}

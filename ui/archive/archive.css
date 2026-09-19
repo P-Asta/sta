@@ -1,0 +1,20 @@
+/* Archive page rows (layout from /common/internal-page.css). */
+
+.arc-space {
+  font-size: 13px;
+  line-height: 1;
+}
+
+.arc-time {
+  min-width: 56px;
+  text-align: right;
+}
+
+.ip-badge.is-auto {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--field-border);
+}
+
+.ip-badge > svg {
+  margin-right: 4px;
+}

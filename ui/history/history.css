@@ -1,0 +1,6 @@
+/* History page rows (layout from /common/internal-page.css). */
+
+.hist-time {
+  min-width: 56px;
+  text-align: right;
+}

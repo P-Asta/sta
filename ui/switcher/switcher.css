@@ -1,0 +1,160 @@
+/* Recent-tab switcher overlay: a row of up to five 132×150 cards on --surface. The root is
+ * max-content sized so the page can report its natural width to the shell, which draws the
+ * rounded card around it (12px above and below, 4px beside it: html.native-card). */
+
+html,
+body {
+  overflow: hidden;
+}
+
+.sw {
+  position: relative;
+  display: flex;
+  gap: 8px;
+  width: max-content;
+  padding: 12px;
+}
+
+/* `overlays.switcher`: one ring that glides to the selected card (switcher.js places it from that
+ * card's own box, so it is exactly on it whether or not the glide runs). */
+.sw-ring {
+  position: absolute;
+  top: 0;
+  left: 0;
+  /* Behind the cards' own content (they paint their backgrounds above a negative index) and above the
+   * page, whose background is the canvas. */
+  z-index: -1;
+  border-radius: var(--radius-lg);
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 2px var(--accent);
+  pointer-events: none;
+}
+
+.native-card .sw {
+  padding: 0 8px;
+}
+
+.sw:empty {
+  width: 132px;
+  height: 60px;
+  padding: 0;
+}
+
+.sw-card {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  width: 132px;
+  height: 150px;
+  padding: 5px;
+  border-radius: var(--radius-lg);
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  box-shadow: inset 0 0 0 1px transparent;
+  transition: background-color var(--t-controls-hover-press), box-shadow var(--t-controls-hover-press);
+}
+
+.sw-card:hover {
+  background: var(--hover);
+}
+
+/* The selected card's own box stays transparent: `.sw-ring` above draws the accent, so it can move. */
+.sw-card.is-selected {
+  background: transparent;
+}
+
+.sw-art {
+  position: relative;
+  display: grid;
+  flex: none;
+  place-items: center;
+  height: 88px;
+  border-radius: var(--radius-md);
+  background: var(--field-bg);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 6%, transparent);
+  overflow: hidden;
+}
+
+.sw-fav {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-lg);
+  /* Always a light tile: most favicons are drawn for light backgrounds. */
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1), inset 0 0 0 1px rgba(0, 0, 0, 0.04);
+}
+
+:root[data-theme="dark"] .sw-fav {
+  background: rgba(255, 255, 255, 0.86);
+}
+
+/* The tile is always light: white monochrome favicons (picked for the OS dark mode) get a contour. */
+.sw-fav img.favicon {
+  filter: drop-shadow(0 0 0.8px rgba(0, 0, 0, 0.45));
+}
+
+.sw-fav.is-glyph {
+  background: var(--surface);
+  color: color-mix(in srgb, var(--accent) 85%, var(--text));
+}
+
+.sw-card.is-loading .sw-fav {
+  opacity: 0.7;
+}
+
+.sw-audio {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--surface) 85%, transparent);
+  color: var(--text);
+}
+
+.sw-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 8px 3px 0;
+}
+
+.sw-title,
+.sw-host {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.sw-title {
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 16px;
+}
+
+.sw-sub {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  color: var(--text-muted);
+  font-size: var(--fs-caption);
+  line-height: 14px;
+}
+
+.sw-space {
+  flex: none;
+  font-size: 11px;
+}
+
+.sw-space-glyph {
+  flex: none;
+  color: var(--text-muted);
+}

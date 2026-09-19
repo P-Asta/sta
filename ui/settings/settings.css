@@ -1,0 +1,527 @@
+/* Settings page: sticky section nav on the left, grouped setting cards on the right. */
+
+.set {
+  display: grid;
+  grid-template-columns: 200px minmax(0, 660px);
+  justify-content: center;
+  gap: 48px;
+  padding: 0 32px 120px;
+}
+
+/* ------------------------------------------------------------------------------------ nav */
+
+.set-nav {
+  position: sticky;
+  top: 0;
+  align-self: start;
+  padding-top: 40px;
+}
+
+.set-nav-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 22px;
+}
+
+.set-nav-title .ip-header-icon {
+  width: 36px;
+  height: 36px;
+}
+
+.set-nav-list {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.set-nav-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 34px;
+  padding: 0 10px;
+  border-radius: var(--radius-md);
+  color: var(--text-muted);
+  font-size: 13.5px;
+  font-weight: 500;
+  transition: background-color var(--t-controls-hover-press), color var(--t-controls-hover-press);
+}
+
+.set-nav-link:hover {
+  background: var(--hover);
+  color: var(--text);
+  text-decoration: none;
+}
+
+/* The active link's tint is `.ip-nav-indicator` behind it (`pages.navIndicator`), so it can glide. */
+.set-nav-link.is-active {
+  color: var(--text);
+}
+
+.set-nav-link > svg {
+  flex: none;
+  color: var(--text-muted);
+}
+
+.set-nav-link.is-active > svg {
+  color: color-mix(in srgb, var(--accent) 85%, var(--text));
+}
+
+.set-nav-link:focus-visible {
+  outline-offset: -2px;
+}
+
+/* ------------------------------------------------------------------------------------ sections */
+
+.set-main {
+  min-width: 0;
+  padding-top: 38px;
+}
+
+.set-section {
+  padding-top: 28px;
+  scroll-margin-top: 12px;
+}
+
+.set-section:first-child {
+  padding-top: 4px;
+}
+
+.set-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.set-section-title {
+  margin: 0 0 10px 4px;
+  color: var(--text);
+  font: 600 15px / 1.3 var(--font-display);
+}
+
+.set-section-head .set-section-title {
+  margin-bottom: 10px;
+}
+
+.set-section-head .btn {
+  margin-bottom: 8px;
+}
+
+.set-select {
+  width: 190px;
+}
+
+.set-select.is-wide {
+  width: 230px;
+}
+
+.set-template {
+  display: block;
+  overflow: hidden;
+  color: var(--text-faint);
+  font: 11.5px / 1.5 var(--font-mono);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.set-custom {
+  padding-top: 4px;
+}
+
+.set-suggest-desc {
+  display: block;
+}
+
+.set-code {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+}
+
+.set-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 6px;
+  color: var(--text);
+}
+
+.set-note > svg {
+  flex: none;
+  margin-top: 2px;
+  color: color-mix(in srgb, var(--accent) 80%, var(--text));
+}
+
+.set-custom .input {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+}
+
+.set-path {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  margin-top: 2px;
+}
+
+.set-path > svg {
+  flex: none;
+  color: var(--text-muted);
+}
+
+.set-default {
+  display: inline-block;
+  margin-top: 4px;
+  color: var(--text-faint);
+  font-size: var(--fs-caption);
+}
+
+/* ------------------------------------------------------------------------------------ appearance */
+
+.set-appearance {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  max-width: 480px;
+}
+
+.set-appearance-option {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 6px;
+  border-radius: var(--radius-lg);
+  text-align: left;
+  transition: background-color var(--t-controls-hover-press);
+}
+
+.set-appearance-option:hover {
+  background: var(--hover);
+}
+
+.set-preview {
+  position: relative;
+  display: flex;
+  height: 78px;
+  overflow: hidden;
+  border-radius: var(--radius-md);
+  box-shadow: 0 0 0 1px var(--field-border);
+  transition: box-shadow var(--t-controls-hover-press);
+}
+
+.set-appearance-option[aria-checked="true"] .set-preview {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+.set-preview-pane {
+  display: flex;
+  flex: 1;
+  gap: 4px;
+  padding: 6px;
+  --pv-frame: #ece6f1;
+  --pv-page: #ffffff;
+  --pv-ink: rgba(28, 27, 32, 0.16);
+  --pv-row: rgba(255, 255, 255, 0.85);
+  background: var(--pv-frame);
+}
+
+.set-preview-pane.is-dark {
+  --pv-frame: #27232d;
+  --pv-page: #1c1b20;
+  --pv-ink: rgba(243, 242, 247, 0.2);
+  --pv-row: rgba(255, 255, 255, 0.12);
+}
+
+.set-preview.is-light .is-dark,
+.set-preview.is-dark .is-light {
+  display: none;
+}
+
+.set-preview.is-system .set-preview-pane {
+  flex: 0 0 50%;
+  overflow: hidden;
+}
+
+.set-preview.is-system .set-preview-pane.is-dark .pv-side {
+  display: none;
+}
+
+.set-preview.is-system .set-preview-pane.is-dark {
+  padding-left: 0;
+}
+
+.set-preview.is-system .set-preview-pane.is-light .pv-page {
+  border-radius: var(--radius-xs) 0 0 var(--radius-xs);
+}
+
+.set-preview.is-system .set-preview-pane.is-dark .pv-page {
+  border-radius: 0 var(--radius-xs) var(--radius-xs) 0;
+}
+
+.pv-side {
+  display: flex;
+  flex: 0 0 28%;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 2px;
+}
+
+.pv-pill {
+  height: 8px;
+  border-radius: var(--radius-full);
+  background: var(--pv-row);
+}
+
+.pv-row {
+  height: 6px;
+  width: 80%;
+  border-radius: var(--radius-full);
+  background: var(--pv-ink);
+}
+
+.pv-row.is-active {
+  width: 100%;
+  height: 8px;
+  background: var(--accent);
+  opacity: 0.8;
+}
+
+.pv-page {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 5px;
+  padding: 8px 7px;
+  border-radius: var(--radius-xs);
+  background: var(--pv-page);
+}
+
+.pv-line {
+  height: 5px;
+  width: 70%;
+  border-radius: var(--radius-full);
+  background: var(--pv-ink);
+}
+
+.pv-line.is-wide {
+  width: 90%;
+  height: 7px;
+}
+
+.pv-line.is-short {
+  width: 45%;
+}
+
+.set-appearance-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 2px 2px;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.set-radio {
+  position: relative;
+  flex: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1.5px var(--field-border);
+  transition: box-shadow var(--t-controls-hover-press);
+}
+
+.set-appearance-option[aria-checked="true"] .set-radio {
+  box-shadow: inset 0 0 0 5px var(--accent);
+}
+
+/* ------------------------------------------------------------------------------------ boosts */
+
+.set-boost {
+  min-height: 56px;
+}
+
+.set-boost-icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-md);
+  background: var(--accent-soft);
+  color: color-mix(in srgb, var(--accent) 82%, var(--text));
+}
+
+.set-boost-icon.is-off {
+  background: var(--field-bg);
+  color: var(--text-faint);
+}
+
+.set-boosts-empty {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.set-boosts-empty > svg {
+  flex: none;
+  margin-top: 2px;
+}
+
+.set-boosts-empty b {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* ------------------------------------------------------------------------------------ about */
+
+.set-about-head {
+  gap: 14px;
+  min-height: 72px;
+}
+
+.set-logo {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-lg);
+  background: linear-gradient(145deg, color-mix(in srgb, var(--accent) 85%, #fff), var(--accent));
+  color: var(--on-accent);
+}
+
+/* "What's new" beside the Download button: the release notes are in its tooltip, because a
+ * settings row is not where a changelog belongs. */
+.set-update-notes {
+  align-self: center;
+  color: var(--text-muted);
+  font-size: var(--fs-small);
+  cursor: default;
+}
+
+/* The sta mark (`icons.js AppMark`, the same drawing as the app icon and the empty state). */
+.set-logo svg {
+  width: 26px;
+  height: 26px;
+}
+
+.set-app-name {
+  color: var(--text);
+  font: 600 15px / 1.3 var(--font-display);
+}
+
+/* ------------------------------------------------------------------------------------ animations
+ * Settings › Animations (FINAL PLAN §6): eight collapsible groups, each with its own switch and an
+ * "n of m on" count, and a switch per animation key. An off parent only *greys* its children
+ * (`aria-disabled`), so a key can still be configured ahead of turning its group back on. */
+
+.set-anim-groups {
+  margin-top: 12px;
+}
+
+.set-anim-groups > .set-anim-group + .set-anim-group {
+  border-top: 1px solid var(--divider);
+}
+
+.set-anim-head {
+  gap: 12px;
+  min-height: 52px;
+}
+
+.set-anim-disclosure {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  margin: -6px -8px;
+  padding: 6px 8px;
+  border-radius: var(--radius-md);
+  text-align: left;
+  /* `controls.hoverPress`: a bare <button>, so no generic `.btn` or row rule reaches it — and this
+   * is the row a user is most likely to be watching when they turn that switch off. */
+  transition: background-color var(--t-controls-hover-press);
+}
+
+.set-anim-disclosure:hover {
+  background: var(--hover);
+}
+
+.set-anim-chevron {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  color: var(--text-muted);
+  /* `controls.toggles`: the disclosure chevron turns as its list opens (internal-page.js
+   * `Disclosure` animates the height itself). */
+  transition: rotate var(--t-controls-toggles) var(--ease-out);
+}
+
+.set-anim-chevron.is-open {
+  rotate: 90deg;
+}
+
+.set-anim-keys {
+  padding: 0 0 8px 42px;
+}
+
+.set-anim-keys[hidden] {
+  display: none;
+}
+
+.set-anim-key {
+  min-height: 48px;
+  padding: 8px 16px 8px 0;
+}
+
+.set-anim-keys > .set-anim-key + .set-anim-key {
+  border-top: 1px solid var(--divider);
+}
+
+/* Greyed, never disabled: the switch keeps working. */
+.set-anim-head.is-dimmed .ip-setting-text,
+.set-anim-key.is-dimmed .ip-setting-text {
+  opacity: 0.55;
+}
+
+.set-anim-head.is-dimmed .ip-setting-control,
+.set-anim-key.is-dimmed .ip-setting-control {
+  opacity: 0.75;
+}
+
+.set-anim-group.is-group-off .set-anim-head .ip-setting-desc {
+  color: var(--text-faint);
+}
+
+@media (max-width: 820px) {
+  .set {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+    padding: 0 20px 80px;
+  }
+
+  .set-nav {
+    position: static;
+    padding-top: 28px;
+  }
+
+  .set-nav-list {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .set-main {
+    padding-top: 8px;
+  }
+}

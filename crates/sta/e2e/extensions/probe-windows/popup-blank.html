@@ -1,0 +1,7 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>sta probe popup (renders nothing)</title>
+<!-- A popup that loads and then renders nothing at all — what a real popup looks like when its
+     service worker threw ("No current window") before it could draw. sta's card must not show an
+     empty rectangle for this: after 3 s it says "This popup doesn't work in sta yet".
+     extensions-e2e points a synthetic listing at this page (section `(c)`). -->

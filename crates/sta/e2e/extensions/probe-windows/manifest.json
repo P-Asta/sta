@@ -1,0 +1,14 @@
+{
+  "manifest_version": 3,
+  "name": "sta probe: windows",
+  "version": "1.0",
+  "description": "sta end-to-end test extension: opens Chrome windows and tabs when a test asks.",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAv5bzyfjAmW0olDaavWiunKsW6DmDKcW4f0wW92R0Z/wuKCquJjdofzViWBM278PbGXKlNWtpufUkcxYck9B/iviIQlKMF0DSk1Wle0S1NVnuVOXcGiYJdOaHYfI6ZRPMMcK0eO76B4iVAG47P+QpFI156X2N4d9gwKJNCYkgG0uCyrifmhaUubU+4pkw0f0WP9mkvc1RYU5Znb3cC5mdVAB2oO2v8jzUPOdIEUhpURscStbvjWhSNVi93qqfnwVDPEd3/M0Otu10t+20aqCr4YVKtkxNH4ArxddsgmK5QYlK0Btxdc0nOqxHFK8Ht7+mMDJIMa4gWWDfNY7A4q2HLQIDAQAB",
+  "background": { "service_worker": "sw.js" },
+  "permissions": ["tabs", "identity", "storage"],
+  "options_ui": { "page": "options.html", "open_in_tab": false },
+  "icons": { "16": "icon16.png", "48": "icon48.png" },
+  "action": { "default_popup": "popup.html", "default_title": "sta probe", "default_icon": { "16": "icon16.png" } },
+  "web_accessible_resources": [{ "resources": ["welcome.html"], "matches": ["<all_urls>"] }],
+  "incognito": "spanning"
+}

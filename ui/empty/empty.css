@@ -1,0 +1,110 @@
+/* sta empty state. The page background is --frame so the rounded card blends into the native
+ * frame insets around the content area. The card has the geometry of a tab's page (2px ring,
+ * --content-radius), where the shell's corner masks sit too. */
+
+html,
+body,
+#app {
+  height: 100%;
+  overflow: hidden;
+  background: var(--frame);
+}
+
+.empty {
+  position: fixed;
+  inset: var(--content-ring);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: var(--content-radius);
+  /* A flat tint: a radial gradient this subtle bands into visible rings on 8-bit displays. */
+  background: color-mix(in srgb, var(--surface) 36%, var(--frame));
+  color: var(--text);
+}
+
+:root[data-theme="dark"] .empty {
+  background: color-mix(in srgb, var(--surface) 42%, var(--frame));
+}
+
+.empty-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  padding: 24px;
+  /* `pages.emptyHero`. The card is created once per page load, so this plays when the empty state
+   * arrives and never again on a state push; while the surface is hidden the animation stays
+   * pending, which is exactly what should happen. */
+  animation: empty-in var(--t-pages-empty-hero) var(--ease-out) both;
+}
+
+@keyframes empty-in {
+  from {
+    opacity: 0;
+    transform: translateY(calc(6px * var(--motion-distance)));
+  }
+}
+
+.empty-mark {
+  width: 112px;
+  height: 112px;
+  margin-bottom: 4px;
+  color: var(--text);
+  opacity: 0.07;
+}
+
+.empty-space {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--text-muted);
+  font-size: var(--fs-body);
+  font-weight: 600;
+}
+
+.empty-space .emoji {
+  font-size: 15px;
+  line-height: 1;
+}
+
+.empty-hints {
+  display: grid;
+  grid-template-columns: auto auto;
+  column-gap: 12px;
+  row-gap: 8px;
+  align-items: center;
+}
+
+.empty-hint {
+  display: contents;
+}
+
+.empty-hint .kbd-group {
+  justify-self: end;
+}
+
+.empty-hint .kbd {
+  height: 20px;
+  min-width: 22px;
+  padding: 0 6px;
+  font: 600 11px / 1 var(--font-ui);
+  letter-spacing: 0.01em;
+}
+
+.empty-hint-label {
+  color: var(--text-muted);
+  font-size: var(--fs-small);
+}
+
+@media (max-height: 300px) {
+  .empty-mark {
+    display: none;
+  }
+}
+
+@media (max-height: 200px), (max-width: 260px) {
+  .empty-hints,
+  .empty-space {
+    display: none;
+  }
+}

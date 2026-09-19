@@ -1,0 +1,14 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>sta probe popup (renders late)</title>
+<style>
+  html, body { margin: 0; }
+  body { font: 13px/1.4 system-ui, sans-serif; }
+  #late { width: 300px; padding: 12px; }
+</style>
+<!-- A popup that loads and then paints ~2 s later — what an MV3 popup waiting for a cold service
+     worker looks like. It must end up in the card at its real size, **not** with the failure line:
+     the verdict is taken from a measurement made at the deadline, not from the last timed one
+     (extensions-e2e section `(c)`, P3-E2E-1). -->
+<div id="host"></div>
+<script src="popup-slow.js"></script>

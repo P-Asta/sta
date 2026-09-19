@@ -1,0 +1,123 @@
+/* Peek header: 40px strip on --surface above the peeked page. Inside sta the shell's rounded
+ * card surrounds both with 12px of surface (html.native-card): the buttons sit at the top of the
+ * strip, so there are 12px above and below them. */
+
+html,
+body {
+  overflow: hidden;
+}
+
+.peek {
+  display: grid;
+  grid-template-columns: minmax(96px, 1fr) minmax(0, auto) minmax(96px, 1fr);
+  align-items: center;
+  gap: 12px;
+  height: 40px;
+  padding: 0 8px;
+}
+
+.native-card .peek {
+  height: 28px;
+  padding: 0;
+}
+
+.peek-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.peek-btn {
+  color: var(--text-muted);
+}
+
+.peek-btn:hover:not(:disabled) {
+  color: var(--text);
+}
+
+.peek-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+:root[data-theme="light"] .peek-fav img.favicon {
+  filter: drop-shadow(0 0 0.6px rgba(0, 0, 0, 0.4));
+}
+
+:root[data-theme="dark"] .peek-fav img.favicon {
+  filter: drop-shadow(0 0 0.6px rgba(255, 255, 255, 0.5));
+}
+
+.peek-fav {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+}
+
+.peek-title {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* The host is Peek's only "where am I", and it carries the Not-secure warning, so it must never be
+ * cut mid-character. Two things used to do exactly that: `max-width: 40%` resolved against
+ * `.peek-center`, which is a shrink-to-fit grid column — so a *short* title gave the host *less*
+ * room — and `text-overflow: ellipsis` never applied, because the text of an `inline-flex` box is
+ * an anonymous flex item. Now the host shrinks with the header (a px cap, not a percentage of its
+ * own row) and its text is a real child that can ellipsise. */
+.peek-host {
+  display: inline-flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  max-width: 240px;
+  color: var(--text-muted);
+  font-size: var(--fs-small);
+  white-space: nowrap;
+}
+
+.peek-host-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.peek-host::before {
+  content: "·";
+  margin-right: 2px;
+  color: var(--text-faint);
+}
+
+.peek-host > svg {
+  flex: none;
+  color: var(--warning);
+}
+
+.peek-side {
+  display: flex;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.peek-note {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 7px;
+  border-radius: var(--radius-xs);
+  background: var(--chip-bg);
+  color: var(--text-muted);
+  font: 500 var(--fs-caption) / 1 var(--font-small);
+  white-space: nowrap;
+}

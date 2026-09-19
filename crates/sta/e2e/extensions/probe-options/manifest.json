@@ -1,0 +1,9 @@
+{
+  "manifest_version": 3,
+  "name": "sta probe: options tab",
+  "version": "1.0",
+  "description": "sta end-to-end test extension: an options page that opens in a tab.",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA800Cuk5nUhQgjyQ9Xt4iJa1YAl5jJvHyIffb6rcjCfb8ablKha/Uc5t440MQ9EgNUmQXwapSILijC+PRZnbC0kyir5HhgjOurCreOSpVNPNKqb7bCYIeZaH7McNZ/97YXFHwcLJ0kenaXgZwxJPTU6WUFfBpFOT3Lp9yOTjhClYC8pR05zRBTWUSViuizpLvIDQM5bz7vDv+O92vmMpl9XvjWODKLUt62hzNGwTw0p8eyIjLKUc75SvRa2b4imKxKCQqd/AQEhrTsw43azHj+fb+B/sQQRXKpr2b1Jovi/r9KF+FXJk0fMn3RFUahpgVCwbSc3VHX6TmICNtpisALwIDAQAB",
+  "background": { "service_worker": "sw.js" },
+  "options_page": "options.html"
+}

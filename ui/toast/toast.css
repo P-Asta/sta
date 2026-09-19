@@ -1,0 +1,76 @@
+/* Toast overlay: a 36px high pill, auto width up to 480px. Inside sta the shell draws it
+ * (16px radius, border, shadow) around the page, adding 16px left and right and 4px above and
+ * below (html.native-card); in mock mode the page is the whole (square) toast. */
+
+html,
+body {
+  overflow: hidden;
+}
+
+/* `.toast` is what `ipc.js trackSurfaceSize` measures, and the shell keeps the size it reports, so
+ * it is never transformed: the pill's own layout and all of its motion live on `.toast-inner`
+ * (docs/ARCHITECTURE.md "Motion", rule 5). */
+.toast {
+  width: max-content;
+  min-width: 120px;
+  max-width: 480px;
+  height: 36px;
+}
+
+.native-card .toast {
+  min-width: 88px;
+  max-width: 448px;
+  height: 28px;
+}
+
+.toast-inner {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 100%;
+  padding: 0 5px 0 14px;
+}
+
+.native-card .toast-inner {
+  padding: 0 0 0 2px;
+}
+
+.toast-inner:empty {
+  padding: 0;
+}
+
+.toast-msg {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.toast-action {
+  flex: none;
+  height: 26px;
+  margin-left: 6px;
+  padding: 0 9px;
+  border-radius: var(--radius-full);
+  color: color-mix(in srgb, var(--accent) 85%, var(--text));
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: background-color var(--t-controls-hover-press);
+}
+
+.toast-action:hover {
+  background: var(--accent-soft);
+}
+
+.toast-action:active {
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
+}
+
+.toast-close {
+  flex: none;
+}

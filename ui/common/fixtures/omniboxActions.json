@@ -1,0 +1,903 @@
+{
+  "text": "",
+  "seq": 1,
+  "inlineCompletion": null,
+  "results": [
+    {
+      "key": "action:page.zoom_reset",
+      "group": "actions",
+      "title": "Actual Size",
+      "subtitle": null,
+      "icon": {
+        "type": "glyph",
+        "name": "zoom"
+      },
+      "hint": "Ctrl+0",
+      "command": {
+        "type": "zoom",
+        "direction": "reset"
+      },
+      "altCommand": null
+    },
+    {
+      "key": "action:split.add_bottom",
+      "group": "actions",
+      "title": "Add Bottom Split",
+      "subtitle": null,
+      "icon": {
+        "type": "glyph",
+        "name": "split"
+      },
+      "hint": null,
+      "command": {
+        "type": "openCommandBar",
+        "mode": "split",
+        "splitSide": "bottom"
+      },
+      "altCommand": null
+    },
+    {
+      "key": "action:split.add_left",
+      "group": "actions",
+      "title": "Add Left Split",
+      "subtitle": null,
+      "icon": {
+        "type": "glyph",
+        "name": "split"
+      },
+      "hint": null,
+      "command": {
+        "type": "openCommandBar",
+        "mode": "split",
+        "splitSide": "left"
+      },
+      "altCommand": null
+    },
+    {
+      "key": "action:split.add_right",
+      "group": "actions",
+      "title": "Add Right Split",
+      "subtitle": null,
+      "icon": {
+        "type": "glyph",
+        "name": "split"
+      },
+      "hint": "Ctrl+Shift+=",
+      "command": {
+        "type": "openCommandBar",
+        "mode": "split",
+        "splitSide": "right"
+      },
+      "altCommand": null
+    },
+    {
+      "key": "action:split.add_top",
+      "group": "actions",
+      "title": "Add Top Split",
+      "subtitle": null,
+      "icon": {
+        "type": "glyph",
+        "name": "split"
+      },
+      "hint": null,
+      "command": {
+        "type": "openCommandBar",
+        "mode": "split",
+        "splitSide": "top"
+      },
+      "altCommand": null
+    },
+    {
+      "key": "action:theme.appearance_dark",
+      "group": "actions",
+      "title": "Appearance: Dark",
+      "subtitle": null,
+      "icon": {
+        "type": "glyph",
+        "name": "moon"
+      },
+      "hint": null,
+      "command": {
+        "type": "updateSettings",
+        "patch": {
+          "searchEngine": null,
+          "customSearchUrl": null,
+          "archiveAfterHours": null,
+          "appearance": "dark",
+          "startup": null,
+          "peekEnabled": null,
+          "downloadDir": null,
+          "askDownloadLocation": null,
+          "searchSuggestions": null,
+          "animations": null,
+          "agentAccess": null,
+          "agentScope": null,
+          "agentSites": null,
+          "agentScripts": null,
+          "agentHistory": null,
+          "agentDownloads": null,
+          "agentAllowPrivateNetwork": null,
+          "agentBlockedHosts": null,
+          "agentAllowedSites": null,
+          "agentTrustedClients": null
+        }
+      },
+      "altCommand": null
+    },
+    {
+      "key": "action:theme.appearance_light",
+      "group": "actions",
+      "title": "Appearance: Light",
+      "subtitle": null,
+      "icon": {
+        "type": "glyph",
+        "name": "sun"
+      },
+      "hint": null,
+      "command": {
+        "type": "updateSettings",
+        "patch": {
+          "searchEngine": null,
+          "customSearchUrl": null,
+          "archiveAfterHours": null,
+          "appearance": "light",
+          "startup": null,
+          "peekEnabled": null,
+          "downloadDir": null,
+          "askDownloadLocation": null,
+          "searchSuggestions": null,
+          "animations": null,
+          "agentAccess": null,
+          "agentScope": null,
+          "agentSites": null,
+          "agentScripts": null,
+          "agentHistory": null,
+          "agentDownloads": null,
+          "agentAllowPrivateNetwork": null,
+          "agentBlockedHosts": null,
+          "agentAllowedSites": null,
+          "agentTrustedClients": null
+        }
+      },
+      "altCommand": null
+    },
+    {
+      "key": "action:space.icon",
+      "group": "actions",
+      "title": "Change Space Icon",
+      "subtitle": null,
+      "icon": {
+        "type": "glyph",
+        "name": "emoji"
+      },
+      "hint": null,
+      "command": {
+        "type": "openSidebarPanel",
+        "panel": {
+          "type": "editSpace",
+          "id": 15
+        }
+      },
+      "altCommand": null
+    },
+    {
+      "key": "action:space.theme",
+      "group": "actions",
+      "title": "Change Space Theme",
+      "subtitle": null,
+      "icon": {
+        "type": "glyph",
+        "name": "palette"
+      },
+      "hint": null,
+      "command": {
+        "type": "openSidebarPanel",
+        "panel": {
+          "type": "editSpace",
+          "id": 15
+        }
+      },
+      "altCommand": null
+    },
+    {
+      "key": "action:archive.clear",
+      "group": "actions",
+      "title": "Clear Archive",
+      "subtitle": null,
+      "icon": {
+        "type": "glyph",
+        "name": "trash"
+      },
+      "hint": null,
+      "command": {
+        "type": "clearArchive"
+      },
+      "altCommand": null
+    },
+    {
+      "key": "action:tabs.clear_today",
+      "group": "actions",
+      "title": "Clear Today Tabs",
+      "subtitle": null,
+      "icon": {
+        "type": "glyph",
+        "name": "archive"
+      },
+      "hint": "Ctrl+Shift+K",
+      "command": {
+        "type": "clearToday",
+        "space": null
+      },
+      "altCommand": null
+    },
+    {
+      "key": "action:tab.close",
+      "group": "actions",
+      "title": "Close Tab",
+      "subtitle": null,
+      "icon": {
+        "type": "glyph",
+        "name": "close"
+      },
+      "hint": "Ctrl+W",
+      "command": {
+        "type": "closeItem",
+        "id": null
+      },
+      "altCommand": null
+    },
+    {
+      "key": "action:tab.copy_url",
+      "group": "actions",
+      "title": "Copy URL",
+      "subtitle": null,
+      "icon": {
+        "type": "glyph",
+        "name": "copy"
+      },
+      "hint": "Ctrl+Shift+C",
+      "command": {
+        "type": "copyUrl",
+        "id": null,
+        "markdown": false
+      },
+      "altCommand": null
+    },
+    {
+      "key": "action:tab.copy_url_md",
+      "group": "actions",
+      "title": "Copy URL as Markdown",
+      "subtitle": null,
+      "icon": {
+        "type": "glyph",
+        "name": "copy"
+      },
+      "hint": "Ctrl+Shift+Alt+C",
+      "command": {
+        "type": "copyUrl",
+        "id": null,
+        "markdown": true
+      },
+      "altCommand": null
+    },
+    {
+      "key": "action:space.delete",
+      "group": "actions",
+      "title": "Delete Space",
+      "subtitle": null,
+      "icon": {
+        "type": "glyph",
+        "name": "trash"
+      },
+      "hint": null,
+      "command": {
+        "type": "openSidebarPanel",
+        "panel": {
+          "type": "editSpace",
+          "id": 15
+        }
+      },
+      "altCommand": null
+    },
+    {
+      "key": "action:page.devtools",
+      "group": "actions",
+      "title": "Developer Tools",
+      "subtitle": null,
+      "icon": {
+        "type": "glyph",
+        "name": "code"
+      },
+      "hint": "F12",
+      "command": {
+        "type": "toggleDevTools"
+      },
+      "altCommand": null
+    },
+    {
+      "key": "action:tab.duplicate",
+      "group": "actions",
+      "title": "Duplicate Tab",
+      "subtitle": null,
+      "icon": {
+        "type": "glyph",
+        "name": "copy"
+      },
+      "hint": null,
+      "command": {
+        "type": "duplicateTab",
+        "id": null
+      },
+      "altCommand": null
+    },
+    {
+      "key": "action:page.find",
+      "group": "actions",
+      "title": "Find in Page",
+      "subtitle": null,
+      "icon": {
+        "type": "glyph",
+        "name": "find"
+      },
+      "hint": "Ctrl+F",
+      "command": {
+        "type": "openFind"
+      },
+      "altCommand": null
+    },
+    {
+      "key": "action:page.back",
+      "group": "actions",
+      "title": "Go Back",
+      "subtitle": null,
+      "icon": {
+        "type": "glyph",
+        "name": "back"
+      },
+      "hint": "Alt+←",
+      "command": {
+        "type": "goBack",
+        "tab": null
+      },
+      "altCommand": null
+    },
+    {
+      "key": "action:space.goto:1",
+      "group": "actions",
+      "title": "Go to Space: Personal",
+      "subtitle": null,
+      "icon": {
+        "type": "emoji",
+        "emoji": "🏠"
+      },
+      "hint": "Alt+1",
+      "command": {
+        "type": "switchSpace",
+        "id": 1
+      },
+      "altCommand": null
+    },
+    {
+      "key": "action:space.goto:8",
+      "group": "actions",
+      "title": "Go to Space: Play",
+      "subtitle": null,
+      "icon": {
+        "type": "emoji",
+        "emoji": "🎮"
+      },
+      "hint": "Alt+2",
+      "command": {
+        "type": "switchSpace",
+        "id": 8
+      },
+      "altCommand": null
+    },
+    {
+      "key": "action:page.reload_hard",
+      "group": "actions",
+      "title": "Hard Reload",
+      "subtitle": null,
+      "icon": {
+        "type": "glyph",
+        "name": "reload"
+      },
+      "hint": "Ctrl+Shift+R",
+      "command": {
+        "type": "reload",
+        "tab": null,
+        "ignoreCache": true
+      },
+      "altCommand": null
+    },
+    {
+      "key": "action:view.boosts",
+      "group": "actions",
+      "title": "Manage Boosts",
+      "subtitle": null,
+      "icon": {
+        "type": "glyph",
+        "name": "boost"
+      },
+      "hint": null,
+      "command": {
+        "type": "openInternalPage",
+        "page": "boosts"
+      },
+      "altCommand": null
+    },
+    {
+      "key": "action:view.manage_extensions",
+      "group": "actions",
+      "title": "Manage Extensions",
+      "subtitle": null,
+      "icon": {
+        "type": "glyph",
+        "name": "puzzle"
+      },
+      "hint": null,
+      "command": {
+        "type": "openUrl",
+        "url": "sta://settings/?section=extensions",
+        "target": "newTab",
+        "opener": null
+      },
+      "altCommand": null
+    },
+    {
+      "key": "action:tab.move_to_space:1",
+      "group": "actions",
+      "title": "Move Tab to Space: Personal",
+      "subtitle": null,
+      "icon": {
+        "type": "emoji",
+        "emoji": "🏠"
+      },
+      "hint": null,
+      "command": {
+        "type": "moveToSpace",
+        "id": 37,
+        "space": 1
+      },
+      "altCommand": null
+    },
+    {
+      "key": "action:tab.move_to_space:8",
+      "group": "actions",
+      "title": "Move Tab to Space: Play",
+      "subtitle": null,
+      "icon": {
+        "type": "emoji",
+        "emoji": "🎮"
+      },
+      "hint": null,
+      "command": {
+        "type": "moveToSpace",
+        "id": 37,
+        "space": 8
+      },
+      "altCommand": null
+    },
+    {
+      "key": "action:boost.new",
+      "group": "actions",
+      "title": "New Boost for this Site",
+      "subtitle": null,
+      "icon": {
+        "type": "glyph",
+        "name": "boost"
+      },
+      "hint": null,
+      "command": {
+        "type": "newBoostForSite",
+        "tab": null
+      },
+      "altCommand": null
+    },
+    {
+      "key": "action:folder.new",
+      "group": "actions",
+      "title": "New Folder",
+      "subtitle": null,
+      "icon": {
+        "type": "glyph",
+        "name": "folder-plus"
+      },
+      "hint": null,
+      "command": {
+        "type": "newFolder",
+        "space": null,
+        "parent": null,
+        "name": null
+      },
+      "altCommand": null
+    },
+    {
+      "key": "action:space.new",
+      "group": "actions",
+      "title": "New Space",
+      "subtitle": null,
+      "icon": {
+        "type": "glyph",
+        "name": "space"
+      },
+      "hint": null,
+      "command": {
+        "type": "openSidebarPanel",
+        "panel": {
+          "type": "newSpace"
+        }
+      },
+      "altCommand": null
+    },
+    {
+      "key": "action:tab.new",
+      "group": "actions",
+      "title": "New Tab",
+      "subtitle": null,
+      "icon": {
+        "type": "glyph",
+        "name": "plus"
+      },
+      "hint": "Ctrl+T",
+      "command": {
+        "type": "openCommandBar",
+        "mode": "newTab",
+        "splitSide": null
+      },
+      "altCommand": null
+    },
+    {
+      "key": "action:view.settings",
+      "group": "actions",
+      "title": "Open Settings",
+      "subtitle": null,
+      "icon": {
+        "type": "glyph",
+        "name": "settings"
+      },
+      "hint": "Ctrl+,",
+      "command": {
+        "type": "openInternalPage",
+        "page": "settings"
+      },
+      "altCommand": null
+    },
+    {
+      "key": "action:space.prev",
+      "group": "actions",
+      "title": "Previous Space",
+      "subtitle": null,
+      "icon": {
+        "type": "glyph",
+        "name": "space"
+      },
+      "hint": "Ctrl+Alt+←",
+      "command": {
+        "type": "switchSpaceAdjacent",
+        "delta": -1
+      },
+      "altCommand": null
+    },
+    {
+      "key": "action:page.print",
+      "group": "actions",
+      "title": "Print…",
+      "subtitle": null,
+      "icon": {
+        "type": "glyph",
+        "name": "print"
+      },
+      "hint": "Ctrl+P",
+      "command": {
+        "type": "print"
+      },
+      "altCommand": null
+    },
+    {
+      "key": "action:app.quit",
+      "group": "actions",
+      "title": "Quit sta",
+      "subtitle": null,
+      "icon": {
+        "type": "glyph",
+        "name": "quit"
+      },
+      "hint": null,
+      "command": {
+        "type": "quit"
+      },
+      "altCommand": null
+    },
+    {
+      "key": "action:page.reload",
+      "group": "actions",
+      "title": "Reload Page",
+      "subtitle": null,
+      "icon": {
+        "type": "glyph",
+        "name": "reload"
+      },
+      "hint": "Ctrl+R",
+      "command": {
+        "type": "reload",
+        "tab": null,
+        "ignoreCache": false
+      },
+      "altCommand": null
+    },
+    {
+      "key": "action:split.close_pane",
+      "group": "actions",
+      "title": "Remove Pane from Split",
+      "subtitle": null,
+      "icon": {
+        "type": "glyph",
+        "name": "split"
+      },
+      "hint": "Ctrl+Shift+-",
+      "command": {
+        "type": "separatePane",
+        "tab": null
+      },
+      "altCommand": null
+    },
+    {
+      "key": "action:space.rename",
+      "group": "actions",
+      "title": "Rename Space",
+      "subtitle": null,
+      "icon": {
+        "type": "glyph",
+        "name": "edit"
+      },
+      "hint": null,
+      "command": {
+        "type": "openSidebarPanel",
+        "panel": {
+          "type": "editSpace",
+          "id": 15
+        }
+      },
+      "altCommand": null
+    },
+    {
+      "key": "action:tab.rename",
+      "group": "actions",
+      "title": "Rename Tab",
+      "subtitle": null,
+      "icon": {
+        "type": "glyph",
+        "name": "edit"
+      },
+      "hint": "F2",
+      "command": {
+        "type": "openSidebarPanel",
+        "panel": {
+          "type": "renameItem",
+          "id": 36
+        }
+      },
+      "altCommand": null
+    },
+    {
+      "key": "action:tab.reopen",
+      "group": "actions",
+      "title": "Reopen Closed Tab",
+      "subtitle": null,
+      "icon": {
+        "type": "glyph",
+        "name": "restore"
+      },
+      "hint": "Ctrl+Shift+T",
+      "command": {
+        "type": "reopenClosed"
+      },
+      "altCommand": null
+    },
+    {
+      "key": "action:split.separate_all",
+      "group": "actions",
+      "title": "Separate All Tabs",
+      "subtitle": null,
+      "icon": {
+        "type": "glyph",
+        "name": "split"
+      },
+      "hint": null,
+      "command": {
+        "type": "separateAll",
+        "id": 37
+      },
+      "altCommand": null
+    },
+    {
+      "key": "action:view.downloads",
+      "group": "actions",
+      "title": "Show Downloads",
+      "subtitle": null,
+      "icon": {
+        "type": "glyph",
+        "name": "download"
+      },
+      "hint": "Ctrl+J",
+      "command": {
+        "type": "openSidebarPanel",
+        "panel": {
+          "type": "downloads"
+        }
+      },
+      "altCommand": null
+    },
+    {
+      "key": "action:view.extensions",
+      "group": "actions",
+      "title": "Show Extensions",
+      "subtitle": null,
+      "icon": {
+        "type": "glyph",
+        "name": "puzzle"
+      },
+      "hint": "Ctrl+E",
+      "command": {
+        "type": "openCommandBar",
+        "mode": "extensions",
+        "splitSide": null
+      },
+      "altCommand": null
+    },
+    {
+      "key": "action:view.history",
+      "group": "actions",
+      "title": "Show History",
+      "subtitle": null,
+      "icon": {
+        "type": "glyph",
+        "name": "history"
+      },
+      "hint": "Ctrl+H",
+      "command": {
+        "type": "openInternalPage",
+        "page": "history"
+      },
+      "altCommand": null
+    },
+    {
+      "key": "action:window.fullscreen",
+      "group": "actions",
+      "title": "Toggle Full Screen",
+      "subtitle": null,
+      "icon": {
+        "type": "glyph",
+        "name": "maximize"
+      },
+      "hint": "F11",
+      "command": {
+        "type": "windowControl",
+        "action": "toggleFullscreen"
+      },
+      "altCommand": null
+    },
+    {
+      "key": "action:sidebar.toggle",
+      "group": "actions",
+      "title": "Toggle Sidebar",
+      "subtitle": null,
+      "icon": {
+        "type": "glyph",
+        "name": "sidebar"
+      },
+      "hint": "Ctrl+S",
+      "command": {
+        "type": "toggleSidebar"
+      },
+      "altCommand": null
+    },
+    {
+      "key": "action:motion.toggle",
+      "group": "actions",
+      "title": "Turn Animations Off",
+      "subtitle": null,
+      "icon": {
+        "type": "glyph",
+        "name": "settings"
+      },
+      "hint": null,
+      "command": {
+        "type": "updateSettings",
+        "patch": {
+          "searchEngine": null,
+          "customSearchUrl": null,
+          "archiveAfterHours": null,
+          "appearance": null,
+          "startup": null,
+          "peekEnabled": null,
+          "downloadDir": null,
+          "askDownloadLocation": null,
+          "searchSuggestions": null,
+          "animations": {
+            "reset": false,
+            "enabled": false,
+            "followSystem": null,
+            "groups": {},
+            "set": {}
+          },
+          "agentAccess": null,
+          "agentScope": null,
+          "agentSites": null,
+          "agentScripts": null,
+          "agentHistory": null,
+          "agentDownloads": null,
+          "agentAllowPrivateNetwork": null,
+          "agentBlockedHosts": null,
+          "agentAllowedSites": null,
+          "agentTrustedClients": null
+        }
+      },
+      "altCommand": null
+    },
+    {
+      "key": "action:view.archive",
+      "group": "actions",
+      "title": "View Archive",
+      "subtitle": null,
+      "icon": {
+        "type": "glyph",
+        "name": "archive"
+      },
+      "hint": null,
+      "command": {
+        "type": "openInternalPage",
+        "page": "archive"
+      },
+      "altCommand": null
+    },
+    {
+      "key": "action:page.view_source",
+      "group": "actions",
+      "title": "View Page Source",
+      "subtitle": null,
+      "icon": {
+        "type": "glyph",
+        "name": "code"
+      },
+      "hint": "Ctrl+U",
+      "command": {
+        "type": "viewSource"
+      },
+      "altCommand": null
+    },
+    {
+      "key": "action:page.zoom_in",
+      "group": "actions",
+      "title": "Zoom In",
+      "subtitle": null,
+      "icon": {
+        "type": "glyph",
+        "name": "zoom"
+      },
+      "hint": "Ctrl+=",
+      "command": {
+        "type": "zoom",
+        "direction": "in"
+      },
+      "altCommand": null
+    },
+    {
+      "key": "action:page.zoom_out",
+      "group": "actions",
+      "title": "Zoom Out",
+      "subtitle": null,
+      "icon": {
+        "type": "glyph",
+        "name": "zoom-out"
+      },
+      "hint": "Ctrl+-",
+      "command": {
+        "type": "zoom",
+        "direction": "out"
+      },
+      "altCommand": null
+    }
+  ]
+}

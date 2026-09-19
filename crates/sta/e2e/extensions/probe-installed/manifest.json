@@ -1,0 +1,9 @@
+{
+  "manifest_version": 3,
+  "name": "__MSG_extName__",
+  "default_locale": "en",
+  "version": "1.0",
+  "description": "sta end-to-end test extension: stands for a Web Store install in the test profile.",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAyzdBIjEiGJEiuvwnJfGSQWWZAKMSQ2DCQDfH2TSJr4YUM0amaYy63CO2BzhadAx23scZfPJ87IEiXYgugWguKtVksK2QOEVYY9joMVpLNskMLd8xa69ojtN9orL2RHrYWWJWTPw24wEwAXFaG+ACKDM+KLVoG+BhNtgbAEfvVlPDNOE6gJ1wPZ+ZS1NwhsglCi7NI+Vk3u6TIp3Wb9LIHupM6ubmiyXwv3s3LvcfONgc1TrXwDiwnOieHDnLd5DTZ2y0RL7qPyPCXn2BfX8ksAFHWhxUPdzVvF8wsrqOFzhOvsuHyvcFzdIn+YpshJVJ1eEUN4EAvVzzDFmH+gR5KQIDAQAB",
+  "web_accessible_resources": [{ "resources": ["welcome.html"], "matches": ["<all_urls>"] }]
+}

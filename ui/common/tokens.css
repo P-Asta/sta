@@ -1,0 +1,453 @@
+/* sta design tokens (docs/research/arc_spec.md §5, docs/PROTOCOL.md §7).
+ *
+ * Theme colors (--frame … --border) are set on :root by theme.js `applyTheme(state)` from the
+ * active space's core-derived ThemeColors. The values below are only fallbacks so a page looks
+ * sane before its first state arrives. Everything else here is theme-independent geometry,
+ * typography and motion, plus a few colors derived from the theme variables. */
+
+/* Registered so theme changes can cross-fade (opt in with <html class="theme-fade">). */
+@property --frame { syntax: '<color>'; inherits: true; initial-value: #efe7f3; }
+@property --grad-start { syntax: '<color>'; inherits: true; initial-value: #efe7f3; }
+@property --grad-end { syntax: '<color>'; inherits: true; initial-value: #efe7f3; }
+@property --accent { syntax: '<color>'; inherits: true; initial-value: #7b5cd6; }
+@property --text { syntax: '<color>'; inherits: true; initial-value: #1c1b20; }
+@property --text-muted { syntax: '<color>'; inherits: true; initial-value: rgba(28, 27, 32, 0.62); }
+@property --hover { syntax: '<color>'; inherits: true; initial-value: rgba(0, 0, 0, 0.05); }
+@property --pressed { syntax: '<color>'; inherits: true; initial-value: rgba(0, 0, 0, 0.09); }
+@property --active-row { syntax: '<color>'; inherits: true; initial-value: rgba(255, 255, 255, 0.78); }
+@property --divider { syntax: '<color>'; inherits: true; initial-value: rgba(0, 0, 0, 0.08); }
+@property --surface { syntax: '<color>'; inherits: true; initial-value: #ffffff; }
+@property --border { syntax: '<color>'; inherits: true; initial-value: rgba(0, 0, 0, 0.1); }
+
+:root {
+  /* ---------------------------------------------------------------- theme fallbacks (light) */
+  --frame: #efe7f3;
+  --grad-start: #efe7f3;
+  --grad-end: #efe7f3;
+  --accent: #7b5cd6;
+  --text: #1c1b20;
+  --text-muted: rgba(28, 27, 32, 0.62);
+  --hover: rgba(0, 0, 0, 0.05);
+  --pressed: rgba(0, 0, 0, 0.09);
+  --active-row: rgba(255, 255, 255, 0.78);
+  --divider: rgba(0, 0, 0, 0.08);
+  --surface: #ffffff;
+  --border: rgba(0, 0, 0, 0.1);
+
+  /* ---------------------------------------------------------------- typography */
+  --font-ui: "Segoe UI Variable Text", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  --font-display: "Segoe UI Variable Display", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  --font-small: "Segoe UI Variable Small", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "Cascadia Mono", Consolas, monospace;
+  --font-emoji: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif;
+  --fs-body: 13px;
+  --fs-small: 12px;
+  --fs-caption: 11px;            /* use with --font-small */
+  --fs-title: 15px;
+  --fs-heading: 20px;
+  --fs-tab: 13px;
+  --fw-tab: 400;
+  --fw-tab-active: 500;
+  --fs-space-title: 13px;
+  --fw-space-title: 600;
+  --fs-url-pill: 12.5px;
+  --fw-url-pill: 500;
+  --fs-cmd-input: 17px;
+  --fs-cmd-title: 14px;
+  --fs-cmd-sub: 12px;
+  --lh-tight: 1.25;
+  --lh-body: 1.45;
+
+  /* ---------------------------------------------------------------- geometry */
+  --sidebar-w-default: 248px;
+  --sidebar-w-min: 200px;
+  --sidebar-w-max: 440px;
+  --sidebar-pad-x: 8px;
+  --row-h: 36px;
+  --row-pad-x: 10px;
+  --row-gap: 2px;
+  --row-radius: var(--radius-md);
+  --favicon: 16px;
+  --favicon-gap: 10px;
+  --row-close-btn: 22px;
+  --topbar-h: 40px;
+  --url-pill-h: 36px;
+  --url-pill-radius: var(--radius-lg);
+  --space-title-h: 32px;
+  --folder-row-h: 32px;
+  --section-gap: 8px;
+  --fav-tile-h: 48px;
+  --fav-tile-min-w: 52px;
+  --fav-gap: 8px;
+  --fav-radius: var(--radius-lg);
+  --fav-icon: 20px;
+  --bottom-bar-h: 44px;
+  --space-icon: 28px;
+  --space-icon-gap: 4px;
+  --frame-gap: 8px;
+  --split-gutter: 6px;
+  --split-ring: 2px;
+  --caption-btn-w: 46px;
+  --scrollbar-w: 6px;
+
+  /* Corner radii. Every rounded corner in ui/ uses one of these (or 50% for circles, or 25% of the
+   * size for favicon tiles and tiny CSS-drawn glyphs such as the agent chip's 8px stop square).
+   * Pick by the element's height: ≤ 20px chips and keys → xs, small buttons and fields → sm, rows,
+   * buttons and inputs → md, cards, tiles, menus and pills → lg, sheets, popovers and big cards →
+   * xl; progress tracks, thumbs and toggles → full. */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-full: 999px;
+  /* Mirrors of the native chrome (crates/sta/src/rounded.rs), for pages that line up with it:
+   * the content card (web pages, the empty state) inside its 2px ring, overlay cards (command bar,
+   * permission, AI agents, switcher, Peek, floating sidebar) with their shadow, the find bar and
+   * the toast.
+   * The shell draws these corners; overlay pages inside a native card (html.native-card) are
+   * square and borderless themselves. */
+  --content-radius: 10px;
+  --content-ring: 2px;
+  --overlay-radius: 12px;
+  --overlay-shadow: 8px;
+  --find-radius: 8px;
+  --toast-radius: 16px;
+  --peek-page-radius: 8px;
+  --control-h: 32px;
+  --control-h-sm: 26px;
+  --icon-btn: 28px;
+  --icon-btn-sm: 22px;
+  --icon: 16px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+
+  /* command bar */
+  --cmd-input-h: 56px;
+  --cmd-row-h: 44px;
+  --cmd-row-h-compact: 36px;
+  --cmd-group-h: 26px;
+  --cmd-max-rows: 8;
+  --cmd-radius: var(--overlay-radius);
+  --cmd-pad: 8px;
+
+  /* layering inside a page */
+  --z-sticky: 10;
+  --z-popover: 1000;
+  --z-menu: 1100;
+  --z-drag: 1200;
+
+  /* ---------------------------------------------------------------- motion */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  /* A spring, as a `linear()` curve: overshoots ~5% once and settles. Use it for presses and
+   * pops, never for anything whose end position matters mid-flight. */
+  --ease-spring: linear(
+    0, 0.006, 0.026 2.5%, 0.107 5.4%, 0.44 13%, 0.6 16.6%, 0.72, 0.81, 0.89, 0.95, 0.99, 1.02,
+    1.04 34%, 1.05, 1.04, 1.03, 1.01, 0.999 55%, 0.998, 1.001, 1.002, 1.001, 1
+  );
+  /* Travel multiplier: 1 normally, 0 at the `reduced` level, so an animation that multiplies its
+   * distance by it becomes a pure opacity fade with identity transforms. */
+  --motion-distance: 1;
+  /* The longest an exit fade may take before the shell hides the surface (FINAL PLAN rule 2:
+   * the shell's own hide delays are correctness delays and are never scaled to 0). */
+  --t-surface-exit: 60ms;
+
+  /* `controls.hoverPress` carries two durations, because a hover tint and a press are not the same
+   * length: `--t-controls-hover-press` for the background and color transitions, and the shorter
+   * `--t-controls-press` for the press scale that goes with them. They belong to the **same** key
+   * and its gate zeroes both, so nothing else may read them. */
+  --t-controls-press: 60ms;
+
+  /* ------------------------------------------------- per-key durations (crates/sta-core/src/motion.rs)
+   * One token per animation key, named from the key in kebab-case: `sidebar.tabInsertRemove` →
+   * `--t-sidebar-tab-insert-remove`. Nothing else may use a key's token, because turning that key
+   * off sets it to 0ms (see the `[data-anim-off]` block below). `tools/check-motion.mjs` checks
+   * that the registry, this list and the settings catalog agree. */
+  --t-sidebar-tab-insert-remove: 180ms;
+  --t-sidebar-reorder: 200ms;
+  --t-sidebar-drag-drop: 120ms;
+  --t-sidebar-folder-expand: 160ms;
+  --t-sidebar-favorites: 140ms;
+  --t-sidebar-space-switch: 220ms;
+  --t-sidebar-active-row: 120ms;
+  --t-sidebar-hover-reveal: 160ms;
+  --t-sidebar-panels: 140ms;
+  --t-sidebar-downloads: 180ms;
+  --t-sidebar-clear-today: 200ms;
+  --t-sidebar-url-pill: 200ms;
+  --t-sidebar-split-row: 140ms;
+  --t-topbar-nav-fade: 90ms;
+  --t-command-bar-open: 140ms;
+  --t-command-bar-results: 100ms;
+  --t-command-bar-selection: 90ms;
+  --t-command-bar-mode-toggle: 120ms;
+  --t-overlays-toast: 180ms;
+  --t-overlays-switcher: 100ms;
+  --t-overlays-find: 120ms;
+  --t-overlays-permission: 120ms;
+  --t-overlays-peek: 120ms;
+  --t-menus-pop-in: 140ms;
+  --t-pages-enter: 200ms;
+  --t-pages-list-rows: 160ms;
+  --t-pages-nav-indicator: 160ms;
+  --t-pages-boosts-editor: 200ms;
+  --t-pages-empty-hero: 320ms;
+  --t-theme-cross-fade: 300ms;
+  --t-controls-hover-press: 90ms;
+  --t-controls-toggles: 140ms;
+  --t-controls-smooth-scroll: 300ms;
+  /* `indicators.loading` is one *period*: the spinner turns once in it, the indeterminate bar
+   * sweeps in 1.5× it and the indeterminate ring turns in 1.25×, so one switch (and the `reduced`
+   * level, which only slows them down) moves all three together. */
+  --t-indicators-loading: 800ms;
+  --t-indicators-badges: 160ms;
+  --t-indicators-audio: 900ms;
+}
+
+/* Colors derived from the theme variables. Custom properties are resolved where they are declared,
+ * so these are re-declared on `.theme-scope` elements that carry their own ThemeColors (previews
+ * built with theme.js `themeStyle(colors)`); otherwise they would keep the page's accent. */
+:root,
+.theme-scope {
+  --accent-soft: color-mix(in srgb, var(--accent) 12%, transparent);   /* selected rows */
+  --accent-softer: color-mix(in srgb, var(--accent) 7%, transparent);
+  --accent-hover: color-mix(in srgb, var(--accent) 88%, var(--text));
+  --on-accent: #ffffff;                                               /* text on --accent */
+  --text-faint: color-mix(in srgb, var(--text-muted) 70%, transparent);
+  --field-bg: color-mix(in srgb, var(--text) 5%, transparent);
+  --field-bg-hover: color-mix(in srgb, var(--text) 8%, transparent);
+  --field-border: color-mix(in srgb, var(--text) 14%, transparent);
+  --chip-bg: color-mix(in srgb, var(--text) 7%, transparent);
+  --track: color-mix(in srgb, var(--text) 14%, transparent);          /* progress/toggle tracks */
+  --scrollbar-thumb: color-mix(in srgb, var(--text) 26%, transparent);
+  --scrollbar-thumb-hover: color-mix(in srgb, var(--text) 40%, transparent);
+  --active-row-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+  --shadow-menu: 0 8px 24px rgba(0, 0, 0, 0.14), 0 1px 3px rgba(0, 0, 0, 0.08);
+  --shadow-drag: 0 6px 16px rgba(0, 0, 0, 0.18);
+  --focus-ring: 2px solid var(--accent);
+  --focus-ring-offset: 2px;
+  --danger: #c42b1c;             /* also the caption close-button hover */
+  --danger-text: #b3261e;
+  --danger-soft: color-mix(in srgb, var(--danger) 12%, transparent);
+  --warning: #b8860b;
+  --success: #2e8540;
+}
+
+:root[data-theme="dark"] {
+  --frame: #221a28;
+  --grad-start: #221a28;
+  --grad-end: #221a28;
+  --accent: #b897f0;
+  --text: #f3f2f7;
+  --text-muted: rgba(243, 242, 247, 0.62);
+  --hover: rgba(255, 255, 255, 0.07);
+  --pressed: rgba(255, 255, 255, 0.11);
+  --active-row: rgba(255, 255, 255, 0.13);
+  --divider: rgba(255, 255, 255, 0.08);
+  --surface: #232228;
+  --border: rgba(255, 255, 255, 0.1);
+}
+
+:root[data-theme="dark"],
+.theme-scope[data-theme="dark"] {
+  --on-accent: #1c1b20;          /* dark-mode accents are light */
+  --active-row-shadow: none;
+  --shadow-menu: 0 8px 28px rgba(0, 0, 0, 0.45), 0 1px 3px rgba(0, 0, 0, 0.3);
+  --shadow-drag: 0 6px 18px rgba(0, 0, 0, 0.5);
+  --danger-text: #ff8a80;
+  --warning: #e6b450;
+  --success: #6cc47c;
+}
+
+.theme-scope {
+  color: var(--text);
+  color-scheme: light;
+}
+
+.theme-scope[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+/* Opt-in cross-fade for space/appearance switches (`theme.crossFade`). `theme.js applyThemeFade`
+ * adds the class only to pages that are **not** inside a native card: a card's fill, border and
+ * corner tiles are the shell's, and they snap at the fade's midpoint, so a page that faded inside
+ * one would show a 3–4 DIP ring of mismatched color for the whole fade. */
+:root.theme-fade {
+  transition-property: --frame, --grad-start, --grad-end, --accent, --text, --text-muted, --hover, --pressed,
+    --active-row, --divider, --surface, --border;
+  transition-duration: var(--t-theme-cross-fade);
+  transition-timing-function: var(--ease-in-out);
+}
+
+/* The other half of the same rule (`theme.js applyThemeFade`): a page inside a native card cannot
+ * fade, so it *waits* and snaps together with the shell's fill, border and corner tiles at the
+ * fade's midpoint (`crates/sta/src/motion.rs chrome_delay_ms` = half the fade). Zero duration, half
+ * the fade of delay: the previous colours are held, then taken in one step. Without it a toast is a
+ * white pill inside a black card for 150 ms. */
+:root.theme-snap {
+  transition-property: --frame, --grad-start, --grad-end, --accent, --text, --text-muted, --hover, --pressed,
+    --active-row, --divider, --surface, --border;
+  transition-duration: 0s;
+  transition-delay: calc(var(--t-theme-cross-fade) / 2);
+}
+
+/* ------------------------------------------------------------------------------------ motion levels
+ *
+ * `theme.js applyMotion(state)` writes `data-motion="full|reduced|off"` and
+ * `data-anim-off="<key> <key> …"` on <html> from `UiState.motion` (docs/PROTOCOL.md §3,
+ * docs/ARCHITECTURE.md "Motion"). Nothing here starts an animation; it only takes motion away.
+ *
+ * Bootstrap: until the first state arrives a page has no `data-motion`, so it follows Windows'
+ * own preference. It mirrors the `reduced` block below. */
+@media (prefers-reduced-motion: reduce) {
+  :root:not([data-motion]) {
+    --motion-distance: 0;
+    --t-controls-press: 0ms;
+    --t-controls-toggles: 0ms;
+    --t-indicators-loading: 1600ms;   /* loading indicators keep moving, slower */
+  }
+}
+
+/* `reduced`: opacity only. Travel collapses (`--motion-distance: 0`), so every rule and every
+ * `motion.js` caller that multiplies its distance by it becomes a pure fade with identity
+ * transforms. Three kinds of motion cannot express themselves that way, because what they animate
+ * is a *position* rather than a travel — a press scale, a toggle thumb or a disclosure chevron
+ * would simply arrive somewhere else — so those go instant here instead. Gliders (the settings and
+ * boosts indicators, the switcher ring, the command bar selection) do the same in JS, which is
+ * what `motion.moves(key)` is for. Color fades — hover tints, the theme cross-fade — are what this
+ * level keeps. */
+:root[data-motion="reduced"],
+:root[data-motion="off"] {
+  --motion-distance: 0;
+  --t-controls-press: 0ms;
+  --t-controls-toggles: 0ms;
+}
+
+:root[data-motion="reduced"] {
+  --t-indicators-loading: 1600ms;
+}
+
+/* `off`: no finite animation at all. All four selectors are scoped to `:root[data-motion="off"]`
+ * — a bare `::before` would kill pseudo-element motion for every page, always. Only *durations*
+ * are zeroed: delays (the 250 ms resize hint, the URL pill's progress fade-out) and end states
+ * survive, so `animationend` still fires and delay-based affordances still work. */
+:root[data-motion="off"],
+:root[data-motion="off"] *,
+:root[data-motion="off"] *::before,
+:root[data-motion="off"] *::after {
+  animation-duration: 0s !important;
+  transition-duration: 0s !important;
+}
+
+/* Loading state is still *shown* at `off`, never nothing (FINAL PLAN §E): a 0s `sta-spin` leaves a
+ * static ring, but an indeterminate bar would sit off-screen and a pulse would vanish, so those
+ * get explicit static fallbacks. The same fallbacks apply when only the indicator's own key is off
+ * — a zeroed period is a zeroed period, whatever turned it off. The agent overlay's arming line
+ * must read "not armed yet" rather than jump to full width; it is a safety affordance, not an
+ * animation anyone may switch off, so only the master switch reaches it. */
+:root[data-motion="off"] .progress.is-indeterminate .progress-fill,
+:root[data-anim-off~="indicators.loading"] .progress.is-indeterminate .progress-fill {
+  animation: none;
+  width: 100%;
+  transform: none;
+  opacity: 0.55;
+}
+
+:root[data-motion="off"] .agent-pulse.is-active::before,
+:root[data-motion="reduced"] .agent-pulse.is-active::before,
+:root[data-anim-off~="indicators.loading"] .agent-pulse.is-active::before {
+  animation: none;
+  opacity: 0.5;
+  transform: scale(1.35);
+}
+
+:root[data-motion="off"] .row-permission,
+:root[data-motion="reduced"] .row-permission,
+:root[data-anim-off~="indicators.badges"] .row-permission {
+  animation: none;
+  box-shadow: 0 0 0 2px var(--frame), 0 0 0 4px color-mix(in srgb, var(--accent) 25%, transparent);
+}
+
+:root[data-motion="off"] .ag-actions.is-arming .ag-arm {
+  animation: none;
+  width: 0;
+}
+
+/* The audio equalizer is an infinite animation in a docked surface: it runs only while the window
+ * is focused (`theme.js applyWindowState` → `<html data-focused>`), and is a still glyph otherwise
+ * — hours of music must not keep the sidebar compositing. */
+:root:not([data-focused]) .audio-bars > rect,
+:root[data-motion="off"] .audio-bars > rect,
+:root[data-motion="reduced"] .audio-bars > rect,
+:root[data-anim-off~="indicators.audio"] .audio-bars > rect {
+  animation: none;
+  transform: none;
+}
+
+/* Ghost layer (motion.js `ghost()`): inert clones of rows that have already been removed, outside
+ * every scroller so shrinking lists cannot move them. */
+.motion-ghosts {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-drag);
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.motion-ghosts:empty {
+  display: none;
+}
+
+/* A ghost is a *clone*, so it arrives carrying whatever CSS animation its original had — the space
+ * sheet's `sheet-in`, a download card's `card-up`, a spinner. None of those may replay on a copy
+ * that exists only to leave: the exit is the WAAPI animation `motion.fadeGhost` puts on it, and
+ * WAAPI still wins for the properties it animates. */
+.motion-ghosts .motion-ghost,
+.motion-ghosts .motion-ghost * {
+  animation: none !important;
+}
+
+/* ------------------------------------------------------------------ per-key off
+ * Turning a key off zeroes its own duration token, so every rule written against that token stops
+ * animating and no other key is affected. WAAPI animations are gated in JS (`motion.js enabled`). */
+:root[data-anim-off~="sidebar.tabInsertRemove"] { --t-sidebar-tab-insert-remove: 0ms; }
+:root[data-anim-off~="sidebar.reorder"] { --t-sidebar-reorder: 0ms; }
+:root[data-anim-off~="sidebar.dragDrop"] { --t-sidebar-drag-drop: 0ms; }
+:root[data-anim-off~="sidebar.folderExpand"] { --t-sidebar-folder-expand: 0ms; }
+:root[data-anim-off~="sidebar.favorites"] { --t-sidebar-favorites: 0ms; }
+:root[data-anim-off~="sidebar.spaceSwitch"] { --t-sidebar-space-switch: 0ms; }
+:root[data-anim-off~="sidebar.activeRow"] { --t-sidebar-active-row: 0ms; }
+:root[data-anim-off~="sidebar.hoverReveal"] { --t-sidebar-hover-reveal: 0ms; }
+:root[data-anim-off~="sidebar.panels"] { --t-sidebar-panels: 0ms; }
+:root[data-anim-off~="sidebar.downloads"] { --t-sidebar-downloads: 0ms; }
+:root[data-anim-off~="sidebar.clearToday"] { --t-sidebar-clear-today: 0ms; }
+:root[data-anim-off~="sidebar.urlPill"] { --t-sidebar-url-pill: 0ms; }
+:root[data-anim-off~="sidebar.splitRow"] { --t-sidebar-split-row: 0ms; }
+:root[data-anim-off~="topbar.navFade"] { --t-topbar-nav-fade: 0ms; }
+:root[data-anim-off~="commandBar.open"] { --t-command-bar-open: 0ms; }
+:root[data-anim-off~="commandBar.results"] { --t-command-bar-results: 0ms; }
+:root[data-anim-off~="commandBar.selection"] { --t-command-bar-selection: 0ms; }
+:root[data-anim-off~="commandBar.modeToggle"] { --t-command-bar-mode-toggle: 0ms; }
+:root[data-anim-off~="overlays.toast"] { --t-overlays-toast: 0ms; }
+:root[data-anim-off~="overlays.switcher"] { --t-overlays-switcher: 0ms; }
+:root[data-anim-off~="overlays.find"] { --t-overlays-find: 0ms; }
+:root[data-anim-off~="overlays.permission"] { --t-overlays-permission: 0ms; }
+:root[data-anim-off~="overlays.peek"] { --t-overlays-peek: 0ms; }
+:root[data-anim-off~="menus.popIn"] { --t-menus-pop-in: 0ms; }
+:root[data-anim-off~="pages.enter"] { --t-pages-enter: 0ms; }
+:root[data-anim-off~="pages.listRows"] { --t-pages-list-rows: 0ms; }
+:root[data-anim-off~="pages.navIndicator"] { --t-pages-nav-indicator: 0ms; }
+:root[data-anim-off~="pages.boostsEditor"] { --t-pages-boosts-editor: 0ms; }
+:root[data-anim-off~="pages.emptyHero"] { --t-pages-empty-hero: 0ms; }
+:root[data-anim-off~="theme.crossFade"] { --t-theme-cross-fade: 0ms; }
+/* `controls.hoverPress` owns both of its durations (see the declarations above). */
+:root[data-anim-off~="controls.hoverPress"] { --t-controls-hover-press: 0ms; --t-controls-press: 0ms; }
+:root[data-anim-off~="controls.toggles"] { --t-controls-toggles: 0ms; }
+:root[data-anim-off~="controls.smoothScroll"] { --t-controls-smooth-scroll: 0ms; }
+:root[data-anim-off~="indicators.loading"] { --t-indicators-loading: 0ms; }
+:root[data-anim-off~="indicators.badges"] { --t-indicators-badges: 0ms; }
+:root[data-anim-off~="indicators.audio"] { --t-indicators-audio: 0ms; }

@@ -1508,7 +1508,7 @@ dependencies = [
 
 [[package]]
 name = "sta"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "cef",
  "cef-dll-sys",
@@ -1528,7 +1528,7 @@ dependencies = [
 
 [[package]]
 name = "sta-core"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "psl",
  "regex",
@@ -1539,7 +1539,7 @@ dependencies = [
 
 [[package]]
 name = "sta-mcp"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "rmcp",
  "serde",

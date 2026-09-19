@@ -59,6 +59,41 @@ jobs:
         with:
           key: ${{ matrix.label }}
 
+      # `cef-dll-sys`'s build script downloads the prebuilt CEF binaries into `$CEF_PATH` the
+      # first time it runs, and Cargo replays its cached output ever after. So the download and
+      # the `target/` cache have to live or die together: a restored `target/` with no `.cef`
+      # next to it links against a `libcef.lib` that was never downloaded
+      # (`LNK1181: cannot open input file 'libcef.lib'`).
+      - name: Which CEF the workspace pins
+        id: cef
+        shell: bash
+        run: |
+          VERSION="$(grep -m1 '^cef = ' Cargo.toml | tr -dc '0-9.')"
+          if [ -z "$VERSION" ]; then
+            echo "::error::could not read the cef version out of Cargo.toml"
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Prebuilt CEF binaries
+        uses: actions/cache@v4
+        with:
+          # The downloaded archive is only ever unpacked once, so cache the tree and not it.
+          path: |
+            ${{ env.CEF_PATH }}
+            !${{ env.CEF_PATH }}/**/*.tar.bz2
+          key: cef-${{ matrix.label }}-${{ steps.cef.outputs.version }}
+
+      - name: Make the build script re-download CEF if it is gone
+        shell: bash
+        run: |
+          if ls "$CEF_PATH"/*/*/libcef.lib >/dev/null 2>&1 || ls "$CEF_PATH"/*/libcef.lib >/dev/null 2>&1; then
+            echo "CEF import library is present, leaving the cached build alone"
+            exit 0
+          fi
+          echo "no libcef.lib under $CEF_PATH — dropping cef-dll-sys so its build script runs again"
+          rm -rf target/release/.fingerprint/cef-dll-sys-* target/release/build/cef-dll-sys-*
+
       - uses: actions/setup-node@v4
         with:
           node-version: 'lts/*'

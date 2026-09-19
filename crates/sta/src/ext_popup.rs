@@ -5,8 +5,9 @@
 //! What sta *can* do is load the popup page itself — `chrome-extension://<id>/<default_popup>` in an
 //! Alloy BrowserView — and put it in an overlay card under a header strip sta draws
 //! (`Overlay::ExtensionPopup`). Verified to work for self-contained popups (design report
-//! `extensions.md`, run6/run8); popups whose service worker asks for `tabs`/`windows` fail, and the
-//! card then **says so** instead of showing an empty rectangle:
+//! `extensions.md`, run6/run8); a popup (or its service worker) that asks for the current tab is
+//! told which tab the card is over (`ext_shim.rs`). One that still renders nothing is **called
+//! that** instead of being shown as an empty rectangle:
 //!
 //! - the card is shown only once the page reports a size **larger than the clamp minimum** (gate S4),
 //!   measured in the page itself and clamped to Chrome's popup limits (25×25 … 800×600); an empty
@@ -144,11 +145,17 @@ pub fn open(id: String, url: String, tab: Option<Id>) {
     // Parenting the view into the (hidden) card creates its browser.
     overlays::adopt_extension_popup(&view, tab);
     let browser_id = view.browser().map(|b| b.identifier());
-    CURRENT.with(|c| {
-        if let Some(popup) = c.borrow_mut().as_mut() {
-            popup.browser_id = browser_id;
-        }
+    let shim = CURRENT.with(|c| {
+        let mut current = c.borrow_mut();
+        let popup = current.as_mut()?;
+        popup.browser_id = browser_id;
+        Some((browser_id?, popup.id.clone(), popup.url.clone()))
     });
+    // "The current tab" for this popup and its extension's service worker (ext_shim.rs), registered
+    // before the page commits.
+    if let Some((browser_id, id, url)) = shim {
+        crate::ext_shim::on_popup_created(browser_id, &id, &url, tab);
+    }
     for at in MEASURE_AT_MS {
         task::post_ui_delayed(at, move || measure(generation, false));
     }
@@ -277,6 +284,8 @@ fn declare_failed(generation: u64) {
 
 /// The popup's browser is gone: either sta closed it, or the page called `window.close()`.
 pub fn on_browser_closed(browser_id: i32) {
+    // Every popup browser had a DevTools client (measuring, the shim), whichever popup is current.
+    crate::ext_shim::on_popup_closed(browser_id);
     let ours = CURRENT.with(|c| c.borrow().as_ref().is_some_and(|p| p.browser_id == Some(browser_id)));
     if !ours {
         return;
@@ -534,7 +543,11 @@ wrap_load_handler! {
             let ours = CURRENT.with(|c| c.borrow().as_ref().filter(|p| p.browser_id == Some(browser.identifier())).map(|p| p.generation));
             // The first measurement the page can actually answer (the timed ones cover async renders).
             if let Some(generation) = ours {
-                task::post_ui(move || measure(generation, false));
+                let id = browser.identifier();
+                task::post_ui(move || {
+                    crate::ext_shim::on_popup_loaded(id);
+                    measure(generation, false);
+                });
             }
         }
     }

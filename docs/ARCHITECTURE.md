@@ -98,8 +98,9 @@ CEF clients and handlers), `browsers` (live-browser registry and roles), `ipc`, 
 `scheme`, `keyboard`, `downloads`, `permissions`, `external` (external protocols), `suggest`
 (remote search suggestions, §5.1), `automation` (AI agents over MCP, §5.2),
 `foreign` (+ `extension_files`, `platform/hidden_windows`: browsers Chromium creates for
-extensions, §4.5), `extensions` (+ `ext_popup`, `ext_backend`, `safe_mode`: the installed-extensions
-listing, the Ctrl+E popup card, turning extensions on and off, the crash-loop guard, §4.6),
+extensions, §4.5), `extensions` (+ `ext_popup`, `ext_shim`, `ext_backend`, `safe_mode`: the
+installed-extensions listing, the Ctrl+E popup card and the tab it tells the extension about, turning
+extensions on and off, the crash-loop guard, §4.6),
 `devtools` (+ `devtools_policy`, `devtools_shim`: DevTools docked in the window,
 §4.1), `devtools_cdp` (the shell's own in-process DevTools client and the docked frontend's session
 bridge, §5.2),
@@ -1228,10 +1229,41 @@ windows out of the way; this is how the user reaches an extension on purpose.
   protocols only with a real user gesture (`external.rs`), downloads, file choosers and permission
   requests are refused, and it never reaches the IPC surface. The card sits **below** the permission
   prompt in the z-order and a prompt closes it (SEC-4).
+- **The current tab (`ext_shim.rs`, `ext_shim.js`)**. Chromium's `tabs.query` / `windows.*` walk Chrome
+  windows, and sta's tabs are in none, so a popup that asks which tab it is over gets `[]` — and so
+  does its service worker, which is who real popups ask (1Password's first message is "which tab?").
+  While a card is open, sta evaluates one script in the popup page (registered for its document with
+  `Page.addScriptToEvaluateOnNewDocument` after `Page.enable` — without which it never runs — so it
+  is there before the page's own scripts) and in **that
+  extension's** service worker (`Target.setAutoAttach` on the popup's DevTools session attaches it to
+  every extension's worker; the others are let go of at once, and a worker session only ever gets
+  `Runtime.evaluate` — `devtools_cdp::worker_evaluate`). The script supplies exactly one fact, the tab
+  the card was opened over, and asks the extension's own `tabs.get` for everything else, so what an
+  extension sees of that tab is still Chromium's decision from its permissions; sta's own pages
+  (`sta://`, `chrome://`) are never offered. The tab's id is **found in the popup page**: tab ids and
+  CEF browser ids are handed out in the same order, so the tab is `popup browser − tab browser` ids
+  below the popup's own `tabs.getCurrent()`, further when Chromium made windows of its own in
+  between, and the URL sta knows the tab by must match. That URL travels in the script's
+  configuration, which the extension can read, so it is only handed to an extension whose manifest
+  lets it read that URL anyway (`ExtensionFiles::may_read_url`). An id found is remembered per browser, and
+  the last pair tells a worker where to look before the page has answered. It ends with the card:
+  the worker sessions close with the popup's browser, and the worker's copy checks
+  `runtime.getContexts` for the popup before every answer. The same script lets `tabs.create` fall
+  back to `windows.create` when there is no Chrome window ("No current window") — a window §4.5
+  hides and turns into an sta tab under core's verdict and budget; an extension page that is itself
+  an sta tab gets the script for that alone (`client.rs` load handler →
+  `ext_shim::on_extension_tab_document`), because a page's own "Sign in" is a `tabs.create` too.
+  **The toolbar click**: what the button does is the extension's to decide at run time
+  (`action.setPopup('')` = "no popup, send me `onClicked`"), not its manifest's. Once per card the
+  worker is asked `action.getPopup`; an empty popup with `onClicked` listeners gets
+  `onClicked.dispatch(<the card's tab>)` and the card closes, instead of showing a popup page that
+  was never meant to be seen (1Password without an account). What it cannot do is grant
+  `activeTab`: an extension that counts on that alone still gets the card's "Needs the current tab"
+  (`extension_files.rs` `needs_current_tab`). Measurements: docs/research/extensions.md §6.
 - **The backend (`ext_backend.rs`)** turns extensions on and off and removes them, because
   `chrome.management` only exists inside a Chromium page. Each operation gets one **never-shown**
   Chrome-style window on `chrome://extensions/`, runs one fixed script in it through
-  `devtools_cdp.rs` (`User::Extensions`, `Runtime.evaluate` only) and closes again. The window is
+  `devtools_cdp.rs` (`User::Extensions`; `Runtime.evaluate` is all it sends) and closes again. The window is
   cloaked and cannot be activated; if it is ever shown, sta re-hides it and abandons the operation.
   Two things are worth knowing:
   - the operation is recorded **before** the window is created, because `window_create_top_level`

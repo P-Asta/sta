@@ -235,20 +235,37 @@ impl ExtensionFiles {
         self.str_at(&["side_panel", "default_path"]).and_then(normalize_page)
     }
 
-    /// The extension asks for the tab the user is looking at (`tabs` or `activeTab`, in either
-    /// manifest version's permission list).
+    /// The extension counts on `activeTab` alone to reach the tab the user is looking at: it asks
+    /// for it, and for neither `tabs` nor any site (in either manifest version's lists).
     ///
-    /// Prebuilt CEF cannot give an action popup a current tab (D1a), so a popup of such an
-    /// extension is the one sta knows may not work — and the card has to say so *before* the
-    /// extension's own "Oops!" page is the only thing on screen, which is what a popup that asks
-    /// for the current tab and gets nothing renders (measured on AdBlock).
+    /// sta tells a popup and its service worker which tab the card was opened over (`ext_shim.rs`),
+    /// and Chromium then shows the extension what its permissions allow. `activeTab` is the one
+    /// permission that is *granted by pressing a toolbar button*, which prebuilt CEF does not have
+    /// (D1a) — so such an extension gets a tab without a URL and cannot inject into it, and the
+    /// card has to say so *before* the extension's own "Oops!" page is the only thing on screen.
     pub fn needs_current_tab(&self) -> bool {
-        ["permissions", "optional_permissions"].iter().any(|key| {
-            self.manifest
-                .get(key)
-                .and_then(Value::as_array)
-                .is_some_and(|list| list.iter().filter_map(Value::as_str).any(|p| p == "tabs" || p == "activeTab"))
-        })
+        let asked: Vec<&str> = ["permissions", "optional_permissions", "host_permissions", "optional_host_permissions"]
+            .iter()
+            .filter_map(|key| self.manifest.get(key).and_then(Value::as_array))
+            .flatten()
+            .filter_map(Value::as_str)
+            .collect();
+        let sites = asked.iter().any(|p| *p == "<all_urls>" || p.contains("://"));
+        asked.contains(&"activeTab") && !asked.contains(&"tabs") && !sites
+    }
+
+    /// Chromium shows this extension the URL of a tab on `url`: it holds `tabs`, or one of its site
+    /// patterns covers the page. Where the two could differ this is the narrower one (optional
+    /// permissions and patterns with a path do not count): `ext_shim.rs` hands an extension the
+    /// URL sta knows a tab by only when `tabs.get` would tell it the same thing anyway.
+    pub fn may_read_url(&self, url: &str) -> bool {
+        let required: Vec<&str> = ["permissions", "host_permissions"]
+            .iter()
+            .filter_map(|key| self.manifest.get(key).and_then(Value::as_array))
+            .flatten()
+            .filter_map(Value::as_str)
+            .collect();
+        required.contains(&"tabs") || required.iter().any(|pattern| site_pattern_covers(pattern, url))
     }
 
     /// Resource patterns web-accessible to every site (`<all_urls>`, `*://*/*`; MV2 lists count).
@@ -457,9 +474,63 @@ pub fn is_external_location(location: i64) -> bool {
     matches!(location, 2 | 3 | 6)
 }
 
+/// A match pattern that covers every path (`<all_urls>`, `*://*/*`, `https://*.example.com/*`)
+/// against a page URL. A pattern that names a path, a port or anything unusual covers nothing here.
+fn site_pattern_covers(pattern: &str, url: &str) -> bool {
+    let Some((scheme, rest)) = url.split_once("://") else { return false };
+    let scheme = scheme.to_ascii_lowercase();
+    if pattern == "<all_urls>" {
+        return matches!(scheme.as_str(), "http" | "https" | "file" | "ftp");
+    }
+    let Some((pattern_scheme, pattern_rest)) = pattern.split_once("://") else { return false };
+    let Some((pattern_host, "*")) = pattern_rest.split_once('/') else { return false };
+    let scheme_ok = match pattern_scheme {
+        "*" => matches!(scheme.as_str(), "http" | "https"),
+        other => other.eq_ignore_ascii_case(&scheme),
+    };
+    // The page's host: no user info, no port, no brackets to get wrong (an IPv6 literal is refused).
+    let authority = rest.split(['/', '?', '#']).next().unwrap_or_default();
+    let host = authority.rsplit_once('@').map_or(authority, |(_, h)| h);
+    if host.contains('[') {
+        return false;
+    }
+    let host = host.split_once(':').map_or(host, |(h, _)| h).to_ascii_lowercase();
+    let host_ok = match pattern_host.strip_prefix("*.") {
+        _ if pattern_host == "*" => true,
+        Some(suffix) => !suffix.is_empty() && (host == suffix || host.ends_with(&format!(".{suffix}"))),
+        None => !pattern_host.contains('*') && !pattern_host.contains(':') && pattern_host.eq_ignore_ascii_case(&host),
+    };
+    scheme_ok && host_ok
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// An extension is handed a tab's URL only when Chromium would show it that URL anyway.
+    #[test]
+    fn a_tab_url_is_only_for_extensions_that_may_read_it() {
+        let files = |manifest: Value| ExtensionFiles { id: "abcdefghijklmnopabcdefghijklmnop".into(), dir: PathBuf::new(), manifest, modified_ms: None, source: Source::Installed };
+        let page = "https://mail.example.com:8443/inbox?x=1#y";
+        assert!(files(serde_json::json!({ "permissions": ["tabs"] })).may_read_url(page));
+        assert!(files(serde_json::json!({ "host_permissions": ["<all_urls>"] })).may_read_url(page));
+        assert!(files(serde_json::json!({ "host_permissions": ["*://*/*"] })).may_read_url(page));
+        assert!(files(serde_json::json!({ "host_permissions": ["https://*.example.com/*"] })).may_read_url(page));
+        assert!(files(serde_json::json!({ "manifest_version": 2, "permissions": ["https://mail.example.com/*"] })).may_read_url(page));
+        for manifest in [
+            serde_json::json!({ "permissions": ["activeTab", "storage"] }),
+            serde_json::json!({ "optional_permissions": ["tabs"], "optional_host_permissions": ["<all_urls>"] }),
+            serde_json::json!({ "host_permissions": ["https://*.example.org/*", "http://*/*", "https://example.com/*"] }),
+            serde_json::json!({ "host_permissions": ["https://mail.example.com/inbox*", "https://*/inbox"] }),
+            serde_json::json!({ "host_permissions": ["https://evilexample.com/*", "https://*.ample.com/*"] }),
+            serde_json::json!({}),
+        ] {
+            assert!(!files(manifest.clone()).may_read_url(page), "{manifest}");
+        }
+        assert!(!files(serde_json::json!({ "host_permissions": ["*://*/*"] })).may_read_url("file:///C:/x.html"), "* is http and https");
+        assert!(files(serde_json::json!({ "host_permissions": ["<all_urls>"] })).may_read_url("http://user:pw@127.0.0.1:8080/login"));
+        assert!(!files(serde_json::json!({ "host_permissions": ["https://*.example.com/*"] })).may_read_url("https://[::1]/"));
+    }
 
     #[test]
     fn ids_and_pages() {
@@ -489,6 +560,22 @@ mod tests {
             let key = manifest.get("key").and_then(Value::as_str).unwrap();
             assert_eq!(id_from_key(key).as_deref(), id.as_str(), "{name}");
         }
+    }
+
+    /// Only `activeTab` on its own leaves a popup without its tab (ext_shim.rs gives every other
+    /// extension the tab, and Chromium shows it what `tabs` or its sites allow).
+    #[test]
+    fn only_active_tab_alone_needs_the_toolbar() {
+        let files = |manifest: Value| ExtensionFiles { id: "abcdefghijklmnopabcdefghijklmnop".into(), dir: PathBuf::new(), manifest, modified_ms: None, source: Source::Installed };
+        let needs = |manifest: Value| files(manifest).needs_current_tab();
+        assert!(needs(serde_json::json!({ "permissions": ["activeTab", "storage"] })));
+        assert!(needs(serde_json::json!({ "permissions": ["storage"], "optional_permissions": ["activeTab"] })));
+        assert!(!needs(serde_json::json!({ "permissions": ["activeTab", "tabs"] })));
+        assert!(!needs(serde_json::json!({ "permissions": ["tabs", "nativeMessaging"], "host_permissions": ["<all_urls>"] })), "1Password");
+        assert!(!needs(serde_json::json!({ "permissions": ["activeTab"], "host_permissions": ["https://*.example.com/*"] })));
+        assert!(!needs(serde_json::json!({ "manifest_version": 2, "permissions": ["activeTab", "http://*/*"] })), "MV2 lists sites with its permissions");
+        assert!(!needs(serde_json::json!({ "permissions": ["storage"] })));
+        assert!(!needs(serde_json::json!({})));
     }
 
     #[test]

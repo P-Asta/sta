@@ -45,6 +45,10 @@
 //! - `pub fn session_call(browser_id: i32, method: &str, params: Value, timeout_ms: i64, done: ...)`
 //! - `pub fn bridge_attach(browser_id: i32)`, `pub fn bridge_detach(browser_id: i32)`,
 //!   `pub fn bridge_is_attached(browser_id: i32) -> bool`, `pub fn bridge_from_frontend(browser_id: i32, raw: &str)`
+//! - `pub struct WorkerTarget { session, url }`, `pub fn watch_workers(browser_id: i32, on_attached: fn(i32, WorkerTarget))`,
+//!   `pub fn worker_evaluate(browser_id: i32, session: &str, expression: &str, timeout_ms: i64, done: ...)`,
+//!   `pub fn worker_detach(browser_id: i32, session: &str)` — the service workers an extension
+//!   popup's session is auto-attached to (`ext_shim.rs`)
 //! - `pub fn on_browser_closed(browser_id: i32)`, `pub fn clear()`, `pub fn debug_snapshot() -> Value`
 
 use crate::task;
@@ -82,7 +86,10 @@ pub enum User {
     /// The extensions work (phase 3): the hidden `chrome://extensions` backend runs one fixed script
     /// per operation (`ext_backend.rs`), and the action-popup card measures the popup page it hosts
     /// (`ext_popup.rs`). Both are sta's own pages-of-record, and `Runtime.evaluate` is all either
-    /// needs — no DOM, no network, no storage.
+    /// needs — no DOM, no network, no storage. The popup card also gives its page and its own
+    /// extension's service worker the "current tab" shim (`ext_shim.rs`): a script for the page's
+    /// next document, and auto-attach to service workers, whose sessions only ever get
+    /// `Runtime.evaluate` ([`worker_evaluate`]).
     Extensions,
 }
 
@@ -90,7 +97,7 @@ impl User {
     pub fn methods(self) -> &'static [&'static str] {
         match self {
             User::Debug => &["Target.createTarget"],
-            User::Extensions => &["Runtime.evaluate"],
+            User::Extensions => &["Runtime.evaluate", "Page.enable", "Page.addScriptToEvaluateOnNewDocument", "Target.setAutoAttach", "Target.detachFromTarget"],
             User::DevTools => &[
                 "DOM.describeNode",
                 "Emulation.setEmulatedMedia",
@@ -143,6 +150,13 @@ wrap_dev_tools_message_observer! {
                 return 1;
             }
             let own = is_own_reply(bytes);
+            // The one root-session event this client reads: a service worker Chromium attached an
+            // extension popup's session to (`watch_workers`).
+            if !own && is_worker_attach(bytes) && watches_workers(self.browser_id) {
+                let (id, bytes) = (self.browser_id, bytes.to_vec());
+                task::post_ui(move || worker_attached(id, &bytes));
+                return 1;
+            }
             // Root-session events and the agent client's replies are never ours; a message on a
             // session only matters while a docked DevTools bridge exists for this browser.
             if !own && !bridge_is_attached(self.browser_id) {
@@ -312,6 +326,7 @@ fn arm_timeout(browser_id: i32, id: i32, timeout_ms: i64) {
 #[allow(dead_code)] // wired by the docked DevTools phase; clear() covers shutdown today
 pub fn on_browser_closed(browser_id: i32) {
     BRIDGES.with(|b| b.borrow_mut().remove(&browser_id));
+    WORKER_WATCHES.with(|w| w.borrow_mut().remove(&browser_id));
     let client = CLIENTS.with(|c| c.borrow_mut().remove(&browser_id));
     if let Some(mut client) = client {
         for (_, done) in std::mem::take(&mut client.pending) {
@@ -324,7 +339,98 @@ pub fn on_browser_closed(browser_id: i32) {
 pub fn clear() {
     let clients = CLIENTS.with(|c| std::mem::take(&mut *c.borrow_mut()));
     BRIDGES.with(|b| b.borrow_mut().clear());
+    WORKER_WATCHES.with(|w| w.borrow_mut().clear());
     drop(clients);
+}
+
+// ============================================================================ extension workers
+//
+// `ext_shim.rs` turns on `Target.setAutoAttach` (service workers only) on an extension popup's
+// browser. Chromium then announces each worker with a root-session `Target.attachedToTarget`; this
+// section hands those to the watcher and lets it evaluate in the sessions it was told about — and
+// in no other.
+
+/// How a root-session `Target.attachedToTarget` starts (Chromium writes `method` first).
+const WORKER_ATTACHED_HEAD: &[u8] = b"{\"method\":\"Target.attachedToTarget\"";
+
+/// A service worker Chromium attached a watching browser's session to.
+pub struct WorkerTarget {
+    pub session: String,
+    pub url: String,
+}
+
+struct WorkerWatch {
+    on_attached: fn(i32, WorkerTarget),
+    sessions: std::collections::HashSet<String>,
+}
+
+thread_local! {
+    static WORKER_WATCHES: RefCell<HashMap<i32, WorkerWatch>> = RefCell::new(HashMap::new());
+}
+
+/// `on_attached` runs for every service worker `browser_id`'s session gets attached to, until the
+/// browser closes. Turning auto-attach on is the caller's `call`.
+pub fn watch_workers(browser_id: i32, on_attached: fn(i32, WorkerTarget)) {
+    WORKER_WATCHES.with(|w| w.borrow_mut().insert(browser_id, WorkerWatch { on_attached, sessions: Default::default() }));
+}
+
+fn watches_workers(browser_id: i32) -> bool {
+    WORKER_WATCHES.with(|w| w.borrow().contains_key(&browser_id))
+}
+
+fn is_worker_attach(bytes: &[u8]) -> bool {
+    bytes.starts_with(WORKER_ATTACHED_HEAD)
+}
+
+fn worker_attached(browser_id: i32, bytes: &[u8]) {
+    let Ok(msg) = serde_json::from_slice::<Value>(bytes) else { return };
+    let params = msg.get("params");
+    let Some(session) = params.and_then(|p| p.get("sessionId")).and_then(Value::as_str).filter(|s| !s.is_empty() && s.len() <= MAX_SESSION_ID) else { return };
+    let info = params.and_then(|p| p.get("targetInfo"));
+    let kind = info.and_then(|i| i.get("type")).and_then(Value::as_str).unwrap_or_default();
+    let url = info.and_then(|i| i.get("url")).and_then(Value::as_str).unwrap_or_default().to_string();
+    let session = session.to_string();
+    let handler = WORKER_WATCHES.with(|w| {
+        let mut w = w.borrow_mut();
+        let watch = w.get_mut(&browser_id)?;
+        watch.sessions.insert(session.clone());
+        Some(watch.on_attached)
+    });
+    let Some(handler) = handler else { return };
+    if kind != "service_worker" {
+        // The filter asks for service workers only; anything else is let go of at once.
+        worker_detach(browser_id, &session);
+        return;
+    }
+    handler(browser_id, WorkerTarget { session, url });
+}
+
+/// `Runtime.evaluate` in a worker session [`watch_workers`] announced for this browser.
+pub fn worker_evaluate(browser_id: i32, session: &str, expression: &str, timeout_ms: i64, done: impl FnOnce(Result<Value, String>) + 'static) {
+    let known = WORKER_WATCHES.with(|w| w.borrow().get(&browser_id).is_some_and(|watch| watch.sessions.contains(session)));
+    if !known {
+        done(Err("unknown worker session".into()));
+        return;
+    }
+    let id = match register_pending(browser_id, Box::new(done)) {
+        Some(id) => id,
+        None => return,
+    };
+    let params = json!({ "expression": expression, "returnByValue": true, "awaitPromise": true });
+    let message = json!({ "id": id, "method": "Runtime.evaluate", "params": params, "sessionId": session }).to_string();
+    if !send_raw(browser_id, &message) {
+        fail_pending(browser_id, id, "DevTools message not accepted");
+        return;
+    }
+    arm_timeout(browser_id, id, timeout_ms);
+}
+
+/// Lets go of a worker session (one that is not the popup's own extension's).
+pub fn worker_detach(browser_id: i32, session: &str) {
+    let known = WORKER_WATCHES.with(|w| w.borrow_mut().get_mut(&browser_id).is_some_and(|watch| watch.sessions.remove(session)));
+    if known {
+        call(browser_id, User::Extensions, "Target.detachFromTarget", json!({ "sessionId": session }), ATTACH_TIMEOUT_MS, |_| {});
+    }
 }
 
 #[cfg_attr(not(debug_assertions), allow(dead_code))] // debug.rs only
@@ -866,6 +972,30 @@ mod tests {
         for denied in ["Runtime.evaluate", "Target.attachToTarget", "Browser.close", "Storage.getCookies", ""] {
             assert!(!User::Debug.allows(denied), "{denied}");
         }
+    }
+
+    /// The popup card's user may register its page script and watch service workers; the worker
+    /// sessions themselves are only reachable through `worker_evaluate`, which sends one method.
+    #[test]
+    fn the_extensions_user_cannot_attach_or_navigate() {
+        for allowed in ["Runtime.evaluate", "Page.enable", "Page.addScriptToEvaluateOnNewDocument", "Target.setAutoAttach", "Target.detachFromTarget"] {
+            assert!(User::Extensions.allows(allowed), "{allowed}");
+        }
+        for denied in ["Target.attachToTarget", "Target.createTarget", "Page.navigate", "Network.getCookies", "Storage.getCookies", "Runtime.addBinding"] {
+            assert!(!User::Extensions.allows(denied), "{denied}");
+        }
+    }
+
+    #[test]
+    fn a_worker_attach_is_recognized_from_its_head() {
+        assert!(is_worker_attach(br#"{"method":"Target.attachedToTarget","params":{"sessionId":"AB","targetInfo":{"type":"service_worker"},"waitingForDebugger":false}}"#));
+        assert!(!is_worker_attach(br#"{"method":"Target.detachedFromTarget","params":{"sessionId":"AB"}}"#));
+        assert!(!is_worker_attach(br#"{"id":1073741824,"result":{"method":"Target.attachedToTarget"}}"#));
+        // A session nobody watches for is never evaluated in.
+        let answer = std::rc::Rc::new(RefCell::new(None));
+        let seen = answer.clone();
+        worker_evaluate(1, "AB", "1", 10, move |r| *seen.borrow_mut() = Some(r));
+        assert_eq!(*answer.borrow(), Some(Err("unknown worker session".to_string())));
     }
 
     /// T2: the session is **appended**, and nothing inside the message is touched — the one

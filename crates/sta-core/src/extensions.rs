@@ -152,9 +152,10 @@ pub struct ExtensionInfo {
     pub options: Option<String>,
     #[serde(default)]
     pub side_panel: Option<String>,
-    /// The manifest asks for `tabs` / `activeTab`. Prebuilt CEF cannot give an action popup the
-    /// current tab (D1a), so the popup card warns before the extension's own error page is all
-    /// there is (`crates/sta/src/extension_files.rs` `needs_current_tab`).
+    /// The manifest counts on `activeTab` alone. sta tells a popup which tab it was opened over, but
+    /// cannot grant `activeTab` (no toolbar button, D1a), so the popup card warns before the
+    /// extension's own error page is all there is (`crates/sta/src/extension_files.rs`
+    /// `needs_current_tab`).
     #[serde(default)]
     pub needs_current_tab: bool,
     #[serde(default)]

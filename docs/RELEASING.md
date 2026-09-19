@@ -95,9 +95,31 @@ an upgrade rather than a second copy. A double-click needs no answers — Window
 one UAC prompt, then sta starts (`LaunchApp`; a silent `/qn` install starts nothing unless it
 passes `LAUNCHAPP=1`). The `.dmg` is a drag-to-Applications image and nothing more.
 
-There is no code signature: SmartScreen warns once on Windows; on macOS, Gatekeeper refuses a double-click on an
-unsigned, quarantined app — open it from the right-click menu the first time. Adding signing (and
-notarization) later is a step in the workflow, not a change to any of this.
+**Code signing (Windows) is there, and off until there is a certificate.** `node
+tools/package-release.mjs sign --dir <staged directory>` (and `--file <the .msi>`) runs `signtool`
+over `sta.exe` and `sta-mcp.exe` with SHA-256 and an RFC 3161 timestamp; the workflow calls it after
+`stage` and again after `msi`, so the archive and the installer carry the same signed binaries.
+Which certificate:
+
+- `STA_SIGN_PFX_BASE64` + `STA_SIGN_PFX_PASSWORD` — a `.pfx` as base64. In CI these are repository
+  **secrets** of the same names; the file exists on disk only while `signtool` runs.
+- `STA_SIGN_THUMBPRINT` — a certificate already in the Windows certificate store (a developer's own,
+  or a hardware token's), by SHA-1 thumbprint. For signing a local build.
+- neither: the step prints one line and succeeds, and the release is unsigned — SmartScreen warns
+  once, and 1Password only takes sta from `C:Program Files` (docs/STATUS.md).
+
+A signature only counts where the certificate's issuer is trusted. A certificate from a public CA
+(or Azure Trusted Signing) is trusted everywhere. A **self-signed** one
+(`New-SelfSignedCertificate -Type CodeSigningCert …`) is trusted on no machine until its owner adds
+it to that machine's *Trusted Root Certification Authorities* — a decision about that machine's
+security, which is why nothing in this repository does it. Measured with 1Password 8.12: an
+unsigned `sta.exe` is refused with `0x800B0100` ("No signature was present"), one signed with an
+untrusted self-signed certificate is read (`publisher: …`) and refused with `0x800B0109` ("terminated
+in a root certificate which is not trusted").
+
+On macOS nothing is signed: Gatekeeper refuses a double-click on an unsigned, quarantined app —
+open it from the right-click menu the first time. Signing and notarization there would be another
+step in the workflow, not a change to any of this.
 
 ## 3. How a running sta updates itself
 

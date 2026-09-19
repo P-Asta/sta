@@ -145,6 +145,16 @@ jobs:
         id: stage
         run: node tools/package-release.mjs stage --target-dir target/release --out dist
 
+      # Authenticode, when the repository has a certificate (secrets STA_SIGN_PFX_BASE64 and
+      # STA_SIGN_PFX_PASSWORD); without one this step says so and the release is unsigned, as before.
+      # Before the archive and the installer are made, so both carry the signed binaries.
+      - name: Sign the binaries
+        if: runner.os == 'Windows'
+        env:
+          STA_SIGN_PFX_BASE64: ${{ secrets.STA_SIGN_PFX_BASE64 }}
+          STA_SIGN_PFX_PASSWORD: ${{ secrets.STA_SIGN_PFX_PASSWORD }}
+        run: node tools/package-release.mjs sign --dir "dist/${{ steps.stage.outputs.name }}"
+
       - name: Archive (zip)
         shell: bash
         run: |
@@ -170,6 +180,13 @@ jobs:
         id: msi
         if: runner.os == 'Windows'
         run: node tools/package-release.mjs msi --dir "dist/${{ steps.stage.outputs.name }}"
+
+      - name: Sign the installer
+        if: runner.os == 'Windows'
+        env:
+          STA_SIGN_PFX_BASE64: ${{ secrets.STA_SIGN_PFX_BASE64 }}
+          STA_SIGN_PFX_PASSWORD: ${{ secrets.STA_SIGN_PFX_PASSWORD }}
+        run: node tools/package-release.mjs sign --file "dist/${{ steps.msi.outputs.installer }}"
 
       - name: Installer (.dmg)
         id: dmg

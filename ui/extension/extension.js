@@ -15,11 +15,12 @@ const send = (command) => dispatch(command).catch(report);
 
 /** What the card says when the popup did not work (mirrors `extensions::POPUP_FAILED_TEXT`). */
 const FAILED_TEXT = "This popup doesn't work in sta yet";
-/** An extension that asks for `tabs`/`activeTab`: sta cannot give a popup the current tab (D1a), so
- * the card says so even when the page paints something — which for such an extension is usually its
- * *own* error page ("Oops! the AdBlock menu had trouble loading"), with nothing from sta anywhere. */
+/** An extension that counts on `activeTab` alone: sta tells a popup which tab it was opened over, but
+ * `activeTab` is granted by pressing a toolbar button sta does not have (D1a), so this one still gets
+ * no URL and cannot reach into the page. The card says so even when the page paints something —
+ * which for such an extension is usually its *own* error page, with nothing from sta anywhere. */
 const LIMITED_TEXT = 'Needs the current tab';
-const LIMITED_TITLE = "sta can't give an extension popup the current tab yet, so parts of this popup may not work.";
+const LIMITED_TITLE = "sta can't grant an extension 'activeTab' yet, so parts of this popup may not work.";
 
 /** Icon URLs the UI's CSP can load: sta's own `__ext-icon` route, or a data URL. */
 const loadableIcon = (url) => (/^(sta:|data:image\/|https:)/i.test(url ?? '') ? url : null);

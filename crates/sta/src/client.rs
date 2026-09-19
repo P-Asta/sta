@@ -994,6 +994,7 @@ wrap_load_handler! {
                 // A new main-frame document: media of the old one is gone.
                 reset_media(browser.identifier());
                 crate::automation::on_load_start(browser.identifier());
+                crate::ext_shim::on_extension_tab_document(frame, &CefString::from(&frame.url()).to_string());
             }
         }
 
@@ -1004,6 +1005,11 @@ wrap_load_handler! {
             }
             if let Some(tab) = tab_of(browser) {
                 tabs::report_zoom_later(tab);
+            }
+            // Again when the document is complete (the script is idempotent): at load start the
+            // extension bindings of a fresh renderer may not be there yet.
+            if web_tab_of(browser).is_some() {
+                crate::ext_shim::on_extension_tab_document(frame, &CefString::from(&frame.url()).to_string());
             }
         }
 

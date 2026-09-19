@@ -119,7 +119,7 @@ the target URL).
 ### `test_info`
 `debug.info`: window, tabs, overlays, rounded, browsers, controller, ipc, keyboard, permissions,
 suggest, sidebarHover, motion, automation, foreign, devtools, devtoolsCdp, extensions, extBackend,
-extPopup, safeMode, downloads and focus, plus a monotonic `at` in milliseconds and `testHooks: true`.
+extPopup, extShim, safeMode, downloads and focus, plus a monotonic `at` in milliseconds and `testHooks: true`.
 
 `motion` is what the animation settings resolved to and the timing the shell owns
 (ARCHITECTURE §4.7, PROTOCOL §14): `level` and `off` as core resolved them, `systemAnimations` (the
@@ -155,7 +155,10 @@ counter, each row's `blocked` reason, and `pending` — states Chromium confirme
 not committed yet, with their age), `extBackend` the hidden `chrome://extensions` operation window
 (the current operation, its window's cloak state, and the `ok` / `failed` / `abortedVisible` /
 `timedOut` counters), `extPopup` the open popup card (its extension, browser, measured size, and
-whether it is showing the honest failure line), and `safeMode` the crash-loop guard (whether this run
+whether it is showing the honest failure line), `extShim` the tab that card told its extension about
+(the tab's browser and URL, the tab id its popup page found, how many of the extension's service
+workers got the script, and the `resolved` / `unresolved` / `strangers` / `clicks` counters — a
+`click` is a toolbar click delivered to an extension that had no popup), and `safeMode` the crash-loop guard (whether this run
 started in safe mode and how many startup crashes are counted). `foreign.windows` adds
 `extraDialogsCloaked` and `dialogRoots`: while an extension is being removed exactly one window owned
 by the hidden backend root is admitted (Chromium's "Remove …?"), and anything else it opens is cloaked

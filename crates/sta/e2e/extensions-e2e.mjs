@@ -633,9 +633,22 @@ async function main() {
     const work = await waitFor(() => inst.eval({ match: 'popup.html' }, `document.getElementById('work') && document.getElementById('work').textContent`), 8000, 200);
     const tabsLine = await inst.eval({ match: 'popup.html' }, `document.getElementById('tabs') && document.getElementById('tabs').textContent`);
     check('c', 'S3: the popup runs as an extension page (chrome.storage works)', work === 'storage: ok', { work, tabsLine });
-    // Prebuilt CEF (D1a): sta's tabs are not Chromium tabs, so this is expected to find none. The
-    // check records what actually happened rather than asserting the aspiration.
-    check('c', `S3: chrome.tabs.query from the popup answers "${tabsLine}" (D1a: sta tabs are invisible to extensions)`, typeof tabsLine === 'string' && tabsLine.startsWith('tabs:'), tabsLine);
+    // sta's tabs are not Chromium tabs (D1a), so Chromium alone answers `[]` here. ext_shim.rs tells
+    // the popup which tab the card was opened over — and the probe asks *while it loads*, so this
+    // also proves the script is in the document before the page's own.
+    check('c', 'S3: chrome.tabs.query({active, currentWindow}) from the popup is the tab under the card', tabsLine === `tabs: 1 ${JSON.stringify([url('/card-host')])}`, tabsLine);
+    const shim = (await inst.info(['extShim'])).extShim;
+    check('c', "the card's tab id was found in the popup page and handed to the extension's service worker", Number.isInteger(shim?.current?.tabId) && shim.current.workers >= 1 && shim.stats.strangers === 0, shim);
+    // The service worker is asked the same thing by real popups (1Password's first message is
+    // "which tab?"); callback style, `windows.getCurrent` and an unrelated query go the same way.
+    const worker = await probeCaller(inst, WINDOWS_ID);
+    const fromWorker = await worker(`Promise.all([
+      chrome.tabs.query({ active: true, lastFocusedWindow: true }).then((ts) => ts.map((t) => [t.url, t.active, t.windowId])),
+      new Promise((done) => chrome.tabs.query({ active: true, currentWindow: true }, (ts) => done(ts.length))),
+      chrome.windows.getCurrent({ populate: true }).then((w) => [w.id, w.focused, w.tabs.length]),
+      chrome.tabs.query({ active: true, currentWindow: true, url: 'https://elsewhere.example/*' }).then((ts) => ts.length),
+    ]).then(JSON.stringify)`);
+    check('c', 'the service worker sees the same tab (promise and callback style, windows.getCurrent, url filters)', fromWorker === JSON.stringify([[[url('/card-host'), true, 1]], 1, [1, true, 1], 0]), fromWorker);
 
     // The client is locked to the extension's own origin: a navigation away is cancelled and offered
     // as a tab instead (R-SEC-6), and the popup document stays where it was.
@@ -650,6 +663,27 @@ async function main() {
     await inst.keys('escape');
     const closed = await waitFor(async () => !(await inst.state()).extensions.popup, 6000, 150);
     check('c', 'Esc closes the popup card', !!closed);
+
+    // The service worker outlives the card, and must not go on answering for a tab the user left.
+    const afterClose = await waitFor(async () => (await worker(`chrome.tabs.query({ active: true, currentWindow: true }).then((ts) => 'tabs ' + ts.length)`)) === 'tabs 0', 4000, 200);
+    check('c', "with the card closed the service worker gets Chromium's own answer again", !!afterClose);
+    // Without a Chrome window `tabs.create` fails ("No current window"); the script falls back to
+    // `windows.create`, whose window foreign.rs hides and turns into an sta tab.
+    const created = await worker(`chrome.tabs.create({ url: ${JSON.stringify(url('/created-from-worker'))} }).then((t) => 'ok ' + t.pendingUrl, (e) => 'failed: ' + e.message)`);
+    const createdTab = await waitForTab(inst, '/created-from-worker', 10000);
+    check('c', 'tabs.create from the service worker opens an sta tab', created === `ok ${url('/created-from-worker')}` && !!createdTab, { created, createdTab });
+
+    // What the toolbar button does is the extension's to decide at run time: `setPopup('')` means
+    // "no popup, tell me about the click" (1Password without an account opens its sign-in page that
+    // way, and its popup page — never meant to be seen then — stays on the logo). sta has no button,
+    // so the card's worker session delivers the click, and the card, with nothing to show, closes.
+    await worker(`(chrome.action.onClicked.addListener((tab) => { self.__staClicked = (tab && tab.url) || 'no url'; }), chrome.action.setPopup({ popup: '' }).then(() => 'ok'))`);
+    await inst.dispatch({ type: 'runExtension', id: WINDOWS_ID, action: 'primary' });
+    const clickedOn = await waitFor(() => worker(`self.__staClicked || ''`), 8000, 200);
+    const cardGone = await waitFor(async () => !(await inst.state()).extensions.popup, 6000, 150);
+    const clicks = (await inst.info(['extShim'])).extShim.stats.clicks;
+    check('c', 'an extension that cleared its popup gets action.onClicked with the tab under the card, and the card closes', clickedOn === url('/created-from-worker') && !!cardGone && clicks === 1, { clickedOn, cardGone: !!cardGone, clicks });
+    await worker(`chrome.action.setPopup({ popup: 'popup.html' }).then(() => 'ok')`);
 
     // A popup that renders nothing says so instead of showing an empty rectangle (UX1). The listing
     // is injected (a shell event) so the card points at the probe's blank page.

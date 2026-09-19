@@ -301,6 +301,7 @@ fn info() -> Value {
         "extensions": crate::extensions::debug_snapshot(),
         "extBackend": crate::ext_backend::debug_snapshot(),
         "extPopup": crate::ext_popup::debug_snapshot(),
+        "extShim": crate::ext_shim::debug_snapshot(),
         "safeMode": crate::safe_mode::debug_snapshot(),
         "downloadsInProgress": crate::downloads::in_progress_count(),
         "focus": {

@@ -64,6 +64,7 @@ mod disk;
 mod downloads;
 mod ext_backend;
 mod ext_popup;
+mod ext_shim;
 mod extension_files;
 mod extensions;
 mod external;

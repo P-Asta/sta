@@ -291,6 +291,7 @@ pub fn teardown() {
     crate::devtools_cdp::clear();
     crate::foreign::clear();
     crate::ext_popup::clear();
+    crate::ext_shim::clear();
     crate::ext_backend::clear();
     crate::extensions::clear();
     browsers::clear();

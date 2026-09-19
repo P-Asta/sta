@@ -148,9 +148,10 @@ in every other Mac browser; what else differs is in [macOS](#macos).
     (`ㄴㅅㅁ` finds "sta …", `gksrmf` finds "한글 …").
   - **The popup card** is sta's own header (icon, name, Options, ×) above the extension's page,
     sized the way Chrome sizes a popup. It appears once the page has something on screen — a popup
-    that paints a second or two in (a cold service worker) is waited for, not called broken. A popup
-    that needs the current tab cannot work here (see the limitations) — after three seconds the card
-    says so instead of showing an empty rectangle.
+    that paints a second or two in (a cold service worker) is waited for, not called broken. While
+    the card is open sta tells the popup and its service worker **which tab it was opened over**, so
+    "the current tab" is the page under the card. A popup that still renders nothing is replaced
+    after three seconds by one honest line instead of an empty rectangle.
   - **Settings › Extensions** turns extensions on and off and removes them. An extension another
     program added stays **off until you allow it**: Turn on shows Chrome's own permission warnings,
     its site access and where the code came from, and the confirm button is not the default one (and
@@ -473,10 +474,11 @@ surface with `?mock` (see `ui/README.md`).
     so an extension whose only entry point is its toolbar button says so in the picker and offers its
     Web Store page. **No extension keyboard shortcuts**, no side panels, and no extension
     context-menu items;
-  - extensions can't see sta's tabs and windows (`chrome.tabs.query`, `chrome.windows.*`), so
-    anything built on "the current tab" — including popups that ask for it — doesn't work. A popup
-    like that opens in sta's card and either shows its own error or nothing at all; after three
-    seconds the card says "This popup doesn't work in sta yet" and offers the options page instead;
+  - extensions can't see sta's tabs and windows by themselves (`chrome.tabs.query`,
+    `chrome.windows.*`). sta fills in **the tab under an open popup card** and nothing else: there is
+    no list of all tabs, no tab events, and `activeTab` is never granted (it takes a toolbar button),
+    so an extension that counts on `activeTab` alone gets the card's "Needs the current tab". A popup
+    that renders nothing gets "This popup doesn't work in sta yet" and its options page instead;
   - **removing an extension uses Chrome's own "Remove …?" dialog**, because Chromium only skips that
     confirmation for an extension removing itself. sta asks nothing of its own, so there is one
     dialog, not two;
@@ -495,8 +497,9 @@ surface with `?mock` (see `ui/README.md`).
     extension that asked;
   - an extension that calls `chrome.tabs.discard` on an sta tab crashes the browser (a CEF bug,
     reported upstream);
-  - password managers that pair with a desktop app (1Password) refuse sta, and there is **no
-    autofill UI**;
+  - password managers that pair with a desktop app check who is calling: 1Password refuses sta
+    until you add `sta.exe` in the 1Password app (Settings › Browser › Add Browser; docs/STATUS.md),
+    and there is **no autofill UI** of sta's own;
   - extensions **other programs registered** (an app that ships a Chrome extension writes it into the
     Windows registry, and Chromium loads it into every profile) arrive turned off and stay off until
     you allow them in Settings › Extensions — with Chrome's own permission warnings and the source in

@@ -4,6 +4,7 @@
 //
 //   node tools/package-release.mjs version  [--set 1.2.3]
 //   node tools/package-release.mjs stage    [--target-dir target/release] [--out dist]
+//   node tools/package-release.mjs sign     --dir dist/sta-1.2.3-windows-x64 | --file dist/….msi
 //   node tools/package-release.mjs msi      --dir dist/sta-1.2.3-windows-x64 [--wix wix]
 //   node tools/package-release.mjs dmg      --dir dist/sta-1.2.3-darwin-arm64
 //   node tools/package-release.mjs manifest --archive dist/sta-1.2.3-windows-x64.zip [--notes "…"]
@@ -198,6 +199,70 @@ function stage(args) {
   return { version, name, dir };
 }
 
+/** `signtool.exe`: on PATH, or the newest x64 one of an installed Windows SDK. */
+function findSigntool() {
+  const onPath = spawnSync('where', ['signtool.exe'], { encoding: 'utf8', windowsHide: true });
+  const first = onPath.status === 0 ? onPath.stdout.split(/\r?\n/).find(Boolean) : null;
+  if (first) return first.trim();
+  const kits = join(process.env['ProgramFiles(x86)'] ?? 'C:\\Program Files (x86)', 'Windows Kits', '10', 'bin');
+  if (!existsSync(kits)) return null;
+  const versions = readdirSync(kits).filter((v) => /^10\./.test(v)).sort((a, b) => b.localeCompare(a, undefined, { numeric: true }));
+  return versions.map((v) => join(kits, v, 'x64', 'signtool.exe')).find(existsSync) ?? null;
+}
+
+/**
+ * Authenticode over the binaries of a staged directory (`--dir`) or over one file (`--file`, the
+ * .msi). Windows only, and **only when a certificate is configured** — without one this prints a
+ * line and succeeds, so an unsigned release keeps building exactly as before:
+ *
+ *   STA_SIGN_THUMBPRINT   a certificate in the current user's (or the machine's) store, by SHA-1
+ *                         thumbprint: a developer's own certificate, or a hardware token's;
+ *   STA_SIGN_PFX_BASE64   a .pfx as base64 (a CI secret), with STA_SIGN_PFX_PASSWORD.
+ *   STA_SIGN_TIMESTAMP    RFC 3161 timestamp server (default DigiCert's), so a signature outlives
+ *                         its certificate.
+ *
+ * What a signature is for here: SmartScreen, and programs that check who is calling before they
+ * talk to a browser (1Password's desktop app refuses an unsigned one — docs/STATUS.md). It only
+ * counts on a machine that trusts the certificate's issuer, which for a self-signed development
+ * certificate is the machine whose owner chose to trust it, and no other.
+ */
+function sign(args) {
+  if (process.platform !== 'win32') throw new Error('Authenticode signing only exists on Windows');
+  const dir = args['--dir'] && args['--dir'] !== 'true' ? resolve(root, args['--dir']) : null;
+  const file = args['--file'] && args['--file'] !== 'true' ? resolve(root, args['--file']) : null;
+  if (!dir === !file) throw new Error('give exactly one of --dir <staged directory> or --file <file>');
+  const files = dir ? ['sta.exe', 'sta-mcp.exe'].map((name) => join(dir, name)) : [file];
+  for (const f of files) if (!existsSync(f)) throw new Error(`${f} does not exist`);
+
+  const thumbprint = (process.env.STA_SIGN_THUMBPRINT ?? '').replace(/\s+/g, '');
+  const pfxBase64 = process.env.STA_SIGN_PFX_BASE64 ?? '';
+  if (!thumbprint && !pfxBase64) {
+    console.log(`package-release: no signing certificate configured (STA_SIGN_THUMBPRINT / STA_SIGN_PFX_BASE64); ${files.map((f) => basename(f)).join(', ')} stay unsigned`);
+    return [];
+  }
+  if (thumbprint && !/^[0-9a-f]{40}$/i.test(thumbprint)) throw new Error('STA_SIGN_THUMBPRINT is not a SHA-1 thumbprint (40 hex characters)');
+  const signtool = findSigntool();
+  if (!signtool) throw new Error('signtool.exe not found: install the Windows SDK, or put signtool on PATH');
+
+  const timestamp = process.env.STA_SIGN_TIMESTAMP || 'http://timestamp.digicert.com';
+  // A .pfx from a secret lives in a file only for as long as signtool needs it.
+  const pfx = thumbprint ? null : join(dirname(files[0]), `.sign-${process.pid}.pfx`);
+  try {
+    if (pfx) writeFileSync(pfx, Buffer.from(pfxBase64, 'base64'), { mode: 0o600 });
+    const identity = thumbprint ? ['/sha1', thumbprint] : ['/f', pfx, ...(process.env.STA_SIGN_PFX_PASSWORD ? ['/p', process.env.STA_SIGN_PFX_PASSWORD] : [])];
+    const signed = spawnSync(signtool, ['sign', '/fd', 'SHA256', '/td', 'SHA256', '/tr', timestamp, '/d', 'sta', ...identity, ...files], { encoding: 'utf8', windowsHide: true });
+    if (signed.error || signed.status !== 0) {
+      // signtool echoes its command line on failure; the password must not end up in a CI log.
+      const why = `${signed.stdout ?? ''}${signed.stderr ?? ''}`.split(/\r?\n/).filter((l) => l.trim() && !l.includes('/p ')).slice(-6).join('\n');
+      throw new Error(`signtool sign failed (exit ${signed.status}):\n${why || signed.error?.message}`);
+    }
+  } finally {
+    if (pfx) rmSync(pfx, { force: true });
+  }
+  console.log(`package-release: signed ${files.map((f) => basename(f)).join(', ')} (${thumbprint ? `certificate ${thumbprint.slice(0, 8)}…` : 'the .pfx from STA_SIGN_PFX_BASE64'}, timestamp ${timestamp})`);
+  return files;
+}
+
 /** The numeric `x.y.z` Windows Installer accepts (a `-beta.1` suffix is not a product version). */
 export function msiVersion(version) {
   const m = /^(\d+)\.(\d+)\.(\d+)/.exec(version);
@@ -316,6 +381,7 @@ const [command, ...rest] = process.argv.slice(2);
 if (import.meta.url === `file://${process.argv[1].replace(/\\/g, '/')}` || process.argv[1].endsWith('package-release.mjs')) {
   try {
     if (command === 'stage') stage(parse(rest));
+    else if (command === 'sign') sign(parse(rest));
     else if (command === 'msi') msi(parse(rest));
     else if (command === 'dmg') dmg(parse(rest));
     else if (command === 'manifest') manifest(parse(rest));
@@ -325,7 +391,7 @@ if (import.meta.url === `file://${process.argv[1].replace(/\\/g, '/')}` || proce
       console.log(set && set !== 'true' ? setWorkspaceVersion(set.replace(/^v/, '')) : workspaceVersion());
     }
     else {
-      console.log('usage: package-release.mjs stage|msi|dmg|manifest|version [options] (see the header)');
+      console.log('usage: package-release.mjs stage|sign|msi|dmg|manifest|version [options] (see the header)');
       process.exit(command ? 1 : 0);
     }
   } catch (e) {

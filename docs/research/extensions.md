@@ -13,11 +13,11 @@ system), not by CEF's removed Alloy extension API. VERIFIED in spike runs:
 
 | Works | Does not work |
 |---|---|
-| MV3 service workers (Web Store, sideloaded, `--load-extension`) | `chrome.tabs.query`, `chrome.windows.*` (they never see Alloy tabs) |
-| Content scripts, `runtime.sendMessage` both ways, `sender.tab.id` | `tabs.create` from a service worker without a Chrome window ("No current window") |
+| MV3 service workers (Web Store, sideloaded, `--load-extension`) | `chrome.tabs.query`, `chrome.windows.*` on their own (they never see Alloy tabs; §6 is what sta adds while a popup card is open) |
+| Content scripts, `runtime.sendMessage` both ways, `sender.tab.id` | `tabs.create` from a service worker without a Chrome window ("No current window"; §6 falls back to `windows.create`) |
 | `declarativeNetRequest`, `webRequest`, `webNavigation` (ad blockers really block) | `action.onClicked`, `action.openPopup`, keyboard `commands`, `sidePanel.open`, extension context-menu items |
 | `tabs.get/update/reload/setZoom`, `scripting.executeScript` with a tab id | `chrome://extensions` in an Alloy tab (blocked: `alloy_browser_host_impl.cc` `IsAllowedWebUIHost`) |
-| Extension pages (`chrome-extension://…`) in tabs, with every `chrome.*` namespace | Popups whose service worker asks for the current tab (AdBlock, 1Password) |
+| Extension pages (`chrome-extension://…`) in tabs, with every `chrome.*` namespace | Popups that count on `activeTab` alone (nothing grants it) |
 | `management`, `debugger`, native messaging (the host starts) | Downloads a service worker starts (cancelled: no CEF browser) |
 
 - The tab id extensions see is the `SessionID`, **not** `CefBrowser::GetIdentifier()` (the CEF header
@@ -115,3 +115,69 @@ Behind `crates/sta/src/ext_backend.rs` and `extensions.rs` (ARCHITECTURE §4.6).
 - A popup page hosted in an Alloy BrowserView runs as a real extension page (`chrome.storage` works)
   but sees **no tabs**: `chrome.tabs.query({active: true, currentWindow: true})` answers `[]`, as
   §1 predicts. VERIFIED (gate S3, with the in-repo probe).
+
+## 6. Telling an extension which tab its popup is over (`ext_shim.rs`)
+
+Measured on 2026-09-19 with the in-repo probe and the real 1Password 8.12.37 extension, in scratch
+profiles through the MCP test surface.
+
+- **Tab ids and CEF browser ids are handed out in the same order.** Every sta browser (surfaces,
+  tabs, cards) gets the next `SessionID` when it is created: browsers 1…8 were tabs
+  `687099966…687099973`. A Chrome-created window takes ids of its own in between (its window and its
+  tab), so the offset between the two only ever grows. VERIFIED.
+- `chrome.tabs.getCurrent()` works in a popup page hosted in the card (it is a `TAB` context, which
+  is also how `runtime.getContexts` lists it), so the page can count down from its own id to the
+  tab's, and check the candidate with `tabs.get(id).url`. VERIFIED.
+- `chrome.tabs.query` is a writable, configurable property and `browser.tabs === chrome.tabs`;
+  1Password's bundled polyfill looks the function up **at call time**, so a replacement installed
+  after the worker started is the one its own code calls (5 calls while its popup opened). VERIFIED.
+- `Target.setAutoAttach` (filter `service_worker`, `flatten`) on a *page's* in-process DevTools
+  session attaches it to **every** extension's service worker, running ones at once and later ones
+  as they start; `Target.attachToBrowserTarget` is refused ("Not allowed"). `waitForDebuggerOnStart`
+  did not pause a worker restarted by `runtime.reload()` (`waitingForDebugger: false`), so sta does
+  not rely on it. VERIFIED.
+- `Page.addScriptToEvaluateOnNewDocument` sent right after `browser_view_create` is in the popup's
+  document before the page's own scripts — **only after `Page.enable`**: without it the call
+  succeeds and the script never runs (a popup that reads the script's state at load found none).
+  VERIFIED (extensions-e2e `(c)`: the probe popup asks at load time and gets the tab).
+- The script's configuration is readable by the extension (it lives in the extension's own
+  global), so the tab's URL is only put there for an extension whose manifest lets it read that
+  URL (`tabs`, or a site pattern covering it). An `activeTab`-only probe got `cfg.url: null` and
+  `[]`; once another extension's popup had found the tab's id it got the tab **without** `url` or
+  `title` — what Chrome itself gives such an extension. VERIFIED.
+- With the script in place 1Password's worker logs `Loaded page details` / `Analyzed the page` for
+  the tab under the card on the **first** popup of a session (before: `[]`, and nothing). VERIFIED.
+- `tabs.create` with no Chrome window fails with "No current window"; `windows.create({url})` in the
+  same state makes a window `foreign.rs` hides and turns into an sta tab — the script's fallback.
+  1Password's settings page "Sign in" opened `https://my.1password.com/signin…` this way. VERIFIED.
+- **What the toolbar button does is decided at run time.** 1Password without an account calls
+  `action.setPopup('')` and opens its welcome page from `action.onClicked`; its manifest still
+  names `popup/index.html`, which was never meant to be shown then and stays on the logo for ever
+  (measured: `action.getPopup({}) === ""`, `onClicked.hasListeners() === true`). Extension event
+  objects expose `dispatch`, so `chrome.action.onClicked.dispatch(tab)` evaluated in the worker
+  session runs the extension's own listener: 1Password then asked for
+  `app/app.html#/page/welcome` (core's ask-first toast, "Open"), and from there Continue › Sign in
+  opened `https://my.1password.com/signin?auth-only=1` as an sta tab. VERIFIED up to the sign-in
+  page; signing in needs an account.
+- That "Sign in" is a `tabs.create` made by the **extension page itself**, in a tab, not by the
+  worker — so extension pages in sta tabs get the script too, for the fallback alone (they are
+  told of no tab: such a page may be in the background). VERIFIED.
+- **Not solved**: `activeTab` (granted by a toolbar button sta does not have), `tabs.onActivated` /
+  `onUpdated` for sta tabs, `tabs.query({})` (all tabs), and a worker that is asked about the
+  current tab while **no** popup card is open (keyboard commands never reach it anyway, §1).
+  Two tabs on the same URL with a Chrome-created window made between them can be told apart only
+  by order; the page counts from its own id, so it picks the right one unless that window was made
+  after the tab *and* a newer same-URL tab sits exactly where the older one is expected. UNVERIFIED
+  (not reproduced).
+- **1Password's desktop app** is a separate matter: it verifies the calling browser's Authenticode
+  signature and answers `BrowserVerificationFailed` / `BrowserSignatureInvalid` for an unsigned
+  `sta.exe` (its log: `%LOCALAPPDATA%\1Password\logs\BrowserSupport`). The extension then reconnects
+  in a loop and its popup stays on the logo. The way out is 1Password's own Settings › Browser ›
+  Add Browser, which its documentation says takes a browser that is code signed or installed
+  under `C:\Program Files` (support.1password.com/additional-browsers). **Measured with the
+  Microsoft Store build 8.12.36: it takes neither of what sta can offer** — the unsigned per-machine
+  install and a build signed with a self-signed certificate the machine trusts are both refused
+  with "The selected application was signed in an unsupported way or may be missing a required
+  identifier". BrowserSupport itself does read such a signature (`publisher: …`) and then stops at
+  `UnknownBrowser(<publisher>)`. So the desktop app is out of reach until sta is signed with a
+  publicly trusted certificate; what works is the extension on its own (previous two points).

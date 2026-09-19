@@ -167,9 +167,20 @@ focus, so it does nothing while the sidebar is hidden or floating.
   calling: **1Password** refuses an unknown browser until you add it in the 1Password app —
   Settings › Browser › **Add Browser** → `sta.exe`. 1Password only offers that for a browser that
   is code signed *or* installed under `C:\Program Files` (sta is not signed, so install it there).
-  Until then "Unlock 1Password" in the extension does nothing at all; the other way round is the
-  extension's own Settings › General › turn off "Integrate with 1Password app" and sign in to the
-  extension directly. Not verified against a real 1Password account.
+  **Measured (Microsoft Store 1Password 8.12.36): Add Browser refuses sta either way** — the
+  unsigned install under Program Files and a build signed with a locally trusted self-signed
+  certificate both get "signed in an unsupported way or may be missing a required identifier". It
+  needs a publicly trusted code-signing certificate (docs/RELEASING.md has the signing step).
+  Until then the desktop app answers every connection with `BrowserVerificationFailed` /
+  `BrowserSignatureInvalid` (its own record: `%LOCALAPPDATA%\1Password\logs\BrowserSupport`, "No
+  signature was present in the subject"), the extension reconnects in a loop, and its popup stays
+  on the 1Password logo for as long as it is open. **What works is the extension on its own**: open
+  `chrome-extension://aeblfdkhhhdcdjpifhhbdiojplfjncoa/app/app.html#/page/settings` in a tab, turn
+  off "Integrate this extension with the 1Password desktop app" (the reconnect loop stops), then
+  Ctrl+E › 1Password. Without an account the extension has no popup; sta delivers the toolbar click
+  instead, the toast offers its welcome page ("Open"), and Continue › Sign in opens 1Password's
+  sign-in page in a tab (docs/research/extensions.md §6). Verified up to that page; signing in and
+  filling were not, for want of an account.
 - **One window, one profile.** No second window, no profiles, no incognito.
 - **No split divider dragging** (fractions are equalised, or set by adding and removing panes).
 - **No favicon cache** for `http:` sites.
@@ -196,11 +207,18 @@ CEF's Alloy runtime — which sta's multi-view layout needs — gives an extensi
 no view of sta's tabs, so:
 - **no toolbar buttons** (sta has no extension toolbar, and no API can press one), **no extension
   keyboard shortcuts**, **no side panels**, **no extension context-menu items**;
-- `chrome.tabs.query` / `chrome.windows.*` see nothing of sta, so anything built on "the current
-  tab" does not work — **including popups that need it**. Such a popup opens in sta's card and
-  usually shows its own error page; the card's header says "Needs the current tab" whenever the
-  extension asks for `tabs`/`activeTab`, and a popup that renders nothing at all is replaced after
-  three seconds by "This popup doesn't work in sta yet" with a link to the options page;
+- `chrome.tabs.query` / `chrome.windows.*` see nothing of sta by themselves. **While an extension's
+  popup card is open**, sta tells that popup and its service worker which tab the card is over
+  (`tabs.query({active, currentWindow})`, `windows.getCurrent` and friends answer with it, and
+  Chromium shows the extension what its permissions allow), and from then on that worker's
+  `tabs.create` opens an sta tab even with no Chrome window. Still missing: `activeTab` is never granted (there is no toolbar button to
+  press), so an extension that counts on it alone gets a tab without a URL — its card says "Needs
+  the current tab"; an extension that cleared its popup at run time (`action.setPopup('')`) gets
+  `action.onClicked` for the tab under the card instead of a card; `tabs.query({})`,
+  `tabs.onActivated` / `onUpdated` know nothing of sta's tabs;
+  and with no card open a service worker is as blind as before. A popup that renders nothing at all
+  is replaced after three seconds by "This popup doesn't work in sta yet" with a link to the options
+  page;
 - **removing an extension uses Chrome's own "Remove …?" dialog** (Chromium skips that confirmation
   only for an extension removing itself). sta adds no dialog of its own, centers that one over its
   window and owns it, so it stays above sta. (In 0.1.3 the dialog was invisible — it inherited the

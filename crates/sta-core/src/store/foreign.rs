@@ -7,6 +7,7 @@
 //!   `urls::foreign_tab_verdict`), so the question names the page's owner as its owner.
 //! - `ExtensionInstalled`: toast, and the id is remembered for 60 s.
 //! - `ForeignBlocked`: toast.
+//! - `LowDiskSpace`: toast, once per run (a full disk makes every Web Store install fail).
 //! - `ToggleDevTools` on a `sta://` page: refused with a toast (DevTools extensions could otherwise
 //!   reach sta's internal pages), unless the shell allowed it (`STA_DEVTOOLS_INTERNAL=1`, debug
 //!   builds only).
@@ -43,6 +44,14 @@ pub const FOREIGN_ASK_MAX: usize = 2;
 /// Shown when a Chrome-created browser runs out of either budget, and by `ForeignBlocked`.
 pub const RATE_LIMITED_TOAST: &str = "An extension keeps opening windows; sta blocked them";
 pub const INCOGNITO_TOAST: &str = "sta has no private windows";
+/// The low-disk toast stays up longer than a plain one: it explains an error the user is about to
+/// see (or just saw) in Chromium's own words.
+const LOW_DISK_TOAST_MS: u32 = 8000;
+
+/// "Could not unzip extension" is what Chromium says when the disk is full; this is what it means.
+pub fn low_disk_toast(free_mb: u64) -> String {
+    format!("Only {free_mb} MB free on this disk — extensions may fail to install (\"Could not unzip extension\")")
+}
 /// Longest extension name shown in a toast. The toast is one line of at most ~70 characters
 /// (`ui/toast/toast.css`: 448 px inner width, no wrapping), so the longer message about extensions
 /// another program added leaves less room for the name.
@@ -173,6 +182,11 @@ impl Store {
                 ForeignBlockReason::RateLimited => self.foreign_flood_toast(now),
                 ForeignBlockReason::Incognito => self.toast(INCOGNITO_TOAST, None),
             },
+            // Once per run: the shell asks again for every store page, and the answer has not
+            // changed in a way a second toast would help with.
+            Command::LowDiskSpace { free_mb } if !std::mem::replace(&mut self.rt.low_disk_noted, true) => {
+                self.toast_for(low_disk_toast(free_mb), None, LOW_DISK_TOAST_MS);
+            }
             _ => {}
         }
     }

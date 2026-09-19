@@ -26,9 +26,13 @@ use std::cmp::Ordering;
 use std::collections::BTreeMap;
 
 /// The repository releases are published from. Both URLs below must live under it.
-pub const REPOSITORY: &str = "P-Asta/Astatine";
+pub const REPOSITORY: &str = "P-Asta/sta";
+/// What that repository was called until 2026-09 (`P-Asta/Astatine` still redirects). A manifest may
+/// name assets under either: the workflow writes whatever `GITHUB_REPOSITORY` says, and 0.1.x trusted
+/// only the old name — which refused every asset the renamed repository's workflow ever listed.
+pub const LEGACY_REPOSITORY: &str = "P-Asta/Astatine";
 /// The manifest of the latest **published** release.
-pub const MANIFEST_URL: &str = "https://github.com/P-Asta/Astatine/releases/latest/download/latest.json";
+pub const MANIFEST_URL: &str = "https://github.com/P-Asta/sta/releases/latest/download/latest.json";
 /// A manifest longer than this is not one of ours.
 pub const MAX_MANIFEST_BYTES: usize = 64 * 1024;
 /// An archive larger than this is not one of ours either (the Windows build is ~200 MB).
@@ -62,6 +66,26 @@ pub const fn platform_key() -> &'static str {
     }
 }
 
+/// How this copy of sta was put on the machine, which decides what can update it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Package {
+    /// Unpacked from the `.zip` (or the macOS app): the updater swaps the files itself.
+    Archive,
+    /// Installed by the `.msi` into Program Files, where sta cannot write: the next `.msi` updates
+    /// it (`msiexec /i … /passive`), listed in the manifest as `<platform>-msi`.
+    Msi,
+}
+
+impl Package {
+    /// This package's key in a manifest's `platforms` map.
+    pub fn key(self) -> String {
+        match self {
+            Package::Archive => platform_key().to_string(),
+            Package::Msi => format!("{}-msi", platform_key()),
+        }
+    }
+}
+
 /// One platform's archive in a manifest.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -78,9 +102,11 @@ impl Asset {
     /// well-formed hash, and a plausible size. A manifest is data from the network; nothing about
     /// it is believed without this.
     pub fn trusted(&self) -> bool {
-        let prefix = format!("https://github.com/{REPOSITORY}/releases/download/");
         let hash_ok = self.sha256.len() == 64 && self.sha256.bytes().all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase());
-        let url_ok = self.url.starts_with(&prefix) && !self.url[prefix.len()..].contains("..");
+        let url_ok = [REPOSITORY, LEGACY_REPOSITORY].iter().any(|repository| {
+            let prefix = format!("https://github.com/{repository}/releases/download/");
+            self.url.starts_with(&prefix) && !self.url[prefix.len()..].contains("..")
+        });
         let size_ok = self.size == 0 || self.size <= MAX_ARCHIVE_BYTES;
         hash_ok && url_ok && size_ok
     }
@@ -120,7 +146,14 @@ impl Manifest {
 
     /// This platform's archive, when the manifest has one and it may be downloaded.
     pub fn asset(&self) -> Option<&Asset> {
-        self.platforms.get(platform_key()).filter(|a| a.trusted())
+        self.asset_for(Package::Archive)
+    }
+
+    /// What updates a copy of sta that was installed as `package`. There is no falling back from
+    /// one to the other: an archive cannot be applied to Program Files, and an .msi would install a
+    /// second copy beside a portable one.
+    pub fn asset_for(&self, package: Package) -> Option<&Asset> {
+        self.platforms.get(&package.key()).filter(|a| a.trusted())
     }
 
     /// Whether this manifest describes a build that supersedes `current`.
@@ -359,11 +392,31 @@ mod tests {
         }
     }
 
+    /// An .msi install and a portable copy are offered different files, and neither falls back to
+    /// the other's.
+    #[test]
+    fn each_package_kind_has_its_own_manifest_entry() {
+        let zip = asset(&format!("https://github.com/{REPOSITORY}/releases/download/v2.0.0/sta-2.0.0.zip"));
+        let msi = asset(&format!("https://github.com/{REPOSITORY}/releases/download/v2.0.0/sta-2.0.0.msi"));
+        let mut manifest = Manifest { version: "2.0.0".into(), pub_date: String::new(), notes: String::new(), platforms: BTreeMap::new() };
+        manifest.platforms.insert(Package::Archive.key(), zip.clone());
+        assert_eq!(Package::Msi.key(), format!("{}-msi", platform_key()));
+        assert_eq!(manifest.asset_for(Package::Archive), Some(&zip));
+        assert_eq!(manifest.asset(), Some(&zip));
+        assert_eq!(manifest.asset_for(Package::Msi), None, "an archive cannot update Program Files");
+        manifest.platforms.insert(Package::Msi.key(), msi.clone());
+        assert_eq!(manifest.asset_for(Package::Msi), Some(&msi));
+        assert_eq!(manifest.asset_for(Package::Archive), Some(&zip));
+    }
+
     #[test]
     fn an_asset_is_trusted_only_from_this_repository_over_https() {
         let good = format!("https://github.com/{REPOSITORY}/releases/download/v1.2.3/sta-1.2.3-windows-x64.zip");
         assert!(asset(&good).trusted());
         assert_eq!(asset(&good).file_name(), "sta-1.2.3-windows-x64.zip");
+        // The repository's old name still redirects, and old workflows wrote it.
+        assert!(asset(&format!("https://github.com/{LEGACY_REPOSITORY}/releases/download/v1.2.3/x.zip")).trusted());
+        assert!(!asset("https://github.com/P-Asta/other/releases/download/v1.2.3/x.zip").trusted());
         for bad in [
             "http://github.com/P-Asta/Astatine/releases/download/v1/x.zip",
             "https://github.com/someone-else/Astatine/releases/download/v1/x.zip",

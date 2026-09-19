@@ -26,10 +26,11 @@ body {
 }
 
 /* A floating sidebar is laid out at the width its card settles at (`--float-width`) and pinned to
- * the right edge of the page, because the window *clips* the card while the shell slides it in from
- * outside (`crates/sta/src/motion.rs slide_sidebar`): the viewport grows from a sliver to the full
- * width, and contents that filled it would be stretched into place instead of travelling in. Pinned
- * right, they stand still relative to the card and ride it in. */
+ * the right edge of the page. The shell slides the card in from outside the window
+ * (`crates/sta/src/motion.rs slide_sidebar`) by moving and clipping it — the viewport does **not**
+ * change during a slide any more (`overlays.rs layout_overlay`) — so this only matters for the odd
+ * frame in which the view is parked or the window is narrower than the card: contents pinned right
+ * at a fixed width are never stretched into place. */
 .sidebar.is-floating {
   left: auto;
   width: var(--float-width, 100%);
@@ -1094,11 +1095,11 @@ html.is-dragging .row.is-active:hover {
 /* ------------------------------------------------------------------------------------ overlay scrollbar */
 
 /* Visible while scrolling, or when the pointer reaches the right edge of the list (8 px hit strip
- * left of the resize handle). */
+ * left of the resize handle, which owns the sidebar's last 8 px). */
 .overlay-scrollbar {
   position: absolute;
   top: 4px;
-  right: 5px;
+  right: 8px;
   bottom: 4px;
   z-index: 3;
   width: 8px;
@@ -1116,7 +1117,7 @@ html.is-dragging .row.is-active:hover {
 .overlay-scrollbar-thumb {
   position: absolute;
   top: 0;
-  right: 1px;
+  right: 0;
   width: 4px;
   border-radius: var(--radius-full);
   background: var(--scrollbar-thumb);
@@ -1311,13 +1312,16 @@ html.is-dragging .row.is-active:hover {
 
 /* ------------------------------------------------------------------------------------ resize handle */
 
+/* The whole gutter between the sidebar's contents and the page card (the sidebar's 8 px right
+ * padding). It used to be the last 5 px with a grip that only showed after a quarter of a second,
+ * and people concluded the sidebar could not be resized at all. */
 .resize-handle {
   position: absolute;
   top: var(--topbar-h);
   right: 0;
   bottom: 0;
   z-index: 5;
-  width: 5px;
+  width: 8px;
   cursor: ew-resize;
   -webkit-app-region: no-drag;
   app-region: no-drag;
@@ -1327,18 +1331,18 @@ html.is-dragging .row.is-active:hover {
   content: "";
   position: absolute;
   top: 8px;
-  right: 1px;
+  right: 2px;
   bottom: 8px;
-  width: 2px;
+  width: 3px;
   border-radius: var(--radius-full);
-  background: color-mix(in srgb, var(--text) 18%, transparent);
+  background: color-mix(in srgb, var(--text) 26%, transparent);
   opacity: 0;
-  transition: opacity 120ms linear;
+  transition: opacity 120ms linear, background-color 120ms linear;
 }
 
 .resize-handle:hover::after {
   opacity: 1;
-  transition-delay: 250ms;
+  transition-delay: 60ms;
 }
 
 html.is-resizing,
@@ -1347,6 +1351,7 @@ html.is-resizing * {
 }
 
 html.is-resizing .resize-handle::after {
+  background: var(--accent);
   opacity: 1;
   transition-delay: 0ms;
 }

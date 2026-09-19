@@ -210,7 +210,11 @@ impl Overlay {
 }
 
 struct Host {
-    /// The overlay contents: a transparent panel the card is built into.
+    /// What the overlay controller hosts. The card's root panel itself — except for the floating
+    /// sidebar, where it is a bare clip panel one level above it ([`rounded::clip_root`]): that card
+    /// keeps its full size while it slides and only the slice inside the clip is drawn.
+    contents: Panel,
+    /// A transparent panel the card is built into.
     panel: Panel,
     /// Built on first use ([`ensure_card`]); its inner panel parents the views.
     card: Option<Card>,
@@ -246,6 +250,9 @@ thread_local! {
     static FOCUS_GUARD: Cell<u32> = const { Cell::new(0) };
     /// How far left of its home the floating sidebar host is drawn while it slides (DIP, ≤ 0).
     static SIDEBAR_SLIDE: Cell<i32> = const { Cell::new(0) };
+    /// How much of the floating sidebar's card is cut off at the window's left edge right now (DIP,
+    /// ≥ 0): what its clip panel was last laid out for (`rounded::set_clip_cut`).
+    static SIDEBAR_CUT: Cell<i32> = const { Cell::new(0) };
 }
 
 // ----------------------------------------------------------------------------------- creation
@@ -254,14 +261,17 @@ thread_local! {
 pub fn create_hosts(window: &Window) {
     for overlay in Overlay::Z_ORDER {
         let Some(panel) = rounded::card_root(&overlay.card_spec()) else { continue };
+        let contents = if overlay == Overlay::SidebarHover { rounded::clip_root(&panel) } else { Some(panel.clone()) };
+        let Some(contents) = contents else { continue };
         let Some(controller) =
-            window.add_overlay_view(Some(&mut View::from(&panel)), DockingMode::CUSTOM, overlay.can_activate() as i32)
+            window.add_overlay_view(Some(&mut View::from(&contents)), DockingMode::CUSTOM, overlay.can_activate() as i32)
         else {
             log_error!("add_overlay_view({overlay:?}) failed");
             continue;
         };
         controller.set_visible(0);
         let host = Host {
+            contents,
             panel,
             card: None,
             controller,
@@ -651,7 +661,7 @@ pub fn visible_overlay_bounds() -> Vec<Rect> {
 /// Origin (window coordinates) of `root` when it is an overlay host's contents panel.
 pub fn root_origin_in_window(root: &View) -> Option<Point> {
     let hosts: Vec<(Panel, OverlayController)> =
-        HOSTS.with(|h| h.borrow().values().map(|host| (host.panel.clone(), host.controller.clone())).collect());
+        HOSTS.with(|h| h.borrow().values().map(|host| (host.contents.clone(), host.controller.clone())).collect());
     hosts.into_iter().find(|(panel, _)| View::from(panel).is_same(Some(&mut root.clone())) != 0).map(|(_, c)| {
         let b = c.bounds();
         Point { x: b.x, y: b.y }
@@ -691,25 +701,40 @@ fn clamp(v: i32, lo: i32, hi: i32) -> i32 {
 }
 
 fn layout_overlay(overlay: Overlay) {
-    let Some((controller, page_w, page_h, tab, failed)) = HOSTS.with(|h| {
-        h.borrow().get(&overlay).map(|host| (host.controller.clone(), host.page_width, host.page_height, host.tab, host.popup_failed))
+    let Some((controller, contents, root, page_w, page_h, tab, failed)) = HOSTS.with(|h| {
+        h.borrow().get(&overlay).map(|host| {
+            (host.controller.clone(), host.contents.clone(), host.panel.clone(), host.page_width, host.page_height, host.tab, host.popup_failed)
+        })
     }) else {
         return;
     };
     let Some(card) = card_rect(overlay, page_w, page_h, tab, failed) else { return };
     // The floating sidebar's host is snapped inwards: its shadow stays clear of the resize bands.
     let mut host = rounded::host_rect(&card, &overlay.card_spec(), rounded::window_snap_unit(), overlay != Overlay::SidebarHover);
-    // …and it is drawn `SIDEBAR_SLIDE` DIP further left while it slides in or out (motion.rs),
-    // clipped by the window's own left edge: an overlay cannot hang outside the window (CEF fits
-    // its bounds to it), so what travels on screen is the card's *visible slice*. The page is laid
-    // out at the card's settled width and pinned to the right of it (`sidebar.css .is-floating`),
-    // so its contents ride the slice in instead of being stretched into place. Never 0 wide: a
-    // widget with no width has no page to paint the next frame from.
-    if overlay == Overlay::SidebarHover && SIDEBAR_SLIDE.get() < 0 {
-        host.x += SIDEBAR_SLIDE.get();
+    if overlay == Overlay::SidebarHover {
+        // It is drawn `SIDEBAR_SLIDE` DIP further left while it slides in or out (motion.rs). An
+        // overlay cannot hang outside the window (CEF fits its bounds to it), so the *host* is cut
+        // down to the slice that is inside the window — and the card in it is not: it keeps its
+        // settled size and is placed `cut` DIP left of the host, where Views clips it. The page is
+        // therefore never resized during a slide, only moved. (Resizing it per step is what this
+        // replaced: every step was a new viewport the renderer had to lay out and raster before the
+        // compositor could show it, and the slide visibly dropped frames.) Never 0 wide: a widget
+        // with no width has no page to paint the next frame from.
+        let home_width = host.width;
+        host.x += SIDEBAR_SLIDE.get().min(0);
         if host.x < 0 {
             host.width = (host.width + host.x).max(1);
             host.x = 0;
+        }
+        // `home_width - host.width`, not `-host.x`: the two differ once the width is held at 1.
+        let cut = home_width - host.width;
+        if SIDEBAR_CUT.replace(cut) != cut {
+            // The cut first, the width right after it: one layout pass sees both (`set_clip_cut`).
+            rounded::set_clip_cut(&contents, &root, cut);
+            if !set_bounds_if_changed(&controller, host) {
+                contents.layout();
+            }
+            return;
         }
     }
     set_bounds_if_changed(&controller, host);
@@ -805,13 +830,16 @@ fn card_rect(overlay: Overlay, page_w: Option<i32>, page_h: Option<i32>, tab: Op
     })
 }
 
-fn set_bounds_if_changed(controller: &OverlayController, rect: Rect) {
+/// `true` when the bounds were actually set (which also lays the overlay's contents out again).
+fn set_bounds_if_changed(controller: &OverlayController, rect: Rect) -> bool {
     if rect.width > 0 && rect.height > 0 {
         let current = controller.bounds();
         if (current.x, current.y, current.width, current.height) != (rect.x, rect.y, rect.width, rect.height) {
             controller.set_bounds(Some(&rect));
+            return true;
         }
     }
+    false
 }
 
 /// The floating sidebar's card (window coordinates): `{8, 8, min(width + 8, client_w - 16),

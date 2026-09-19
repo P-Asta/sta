@@ -1797,7 +1797,7 @@ async function devtools(tab) {
   }
   await sleep(400);
   const countsAfter = await counts();
-  const fired = ['toggleDevTools', 'focusDevTools', 'openCommandBar', 'closeItem'].filter((k) => (countsAfter[k] || 0) !== (countsBefore[k] || 0));
+  const fired = ['toggleDevTools', 'focusDevTools', 'openCommandBar', 'toggleCommandBar', 'closeItem'].filter((k) => (countsAfter[k] || 0) !== (countsBefore[k] || 0));
   const blockedAfter = (await inst.info(['keyboard'])).keyboard.injectedBlocked;
   check(S, 'agent key events reach no sta shortcut (F12, Ctrl+Shift+I, Ctrl+T, Ctrl+W)', fired.length === 0 && blockedAfter > blockedBefore, { fired, blocked: [blockedBefore, blockedAfter] });
   check(S, 'and the tab and its DevTools are still there', (await dt()).docks.length === 1 && !!tabById(await st(), tab));

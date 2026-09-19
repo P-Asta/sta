@@ -69,10 +69,14 @@ pub const SLIDE_OUT_MS: i64 = 240;
 /// told to show its contents at the same moment, and this is the frame or two it needs to paint
 /// them. Nothing is on screen meanwhile — the card is entirely outside the window.
 pub const SLIDE_LEAD_MS: i64 = 24;
-/// One step of a slide. Every step resizes the card's visible slice, and a resize makes its page
-/// lay out again, so this is deliberately one 60 Hz frame rather than as often as the timer could
-/// fire: ten steps carry the card in, and none of them is wasted work.
-const SLIDE_STEP_MS: i64 = 16;
+/// How often a slide asks where the card should be. **Not** a frame time: Windows runs delayed
+/// tasks on its 15.6 ms timer tick, so a 16 ms delay lands on every *second* tick — measured, a
+/// 160 ms slide got 7 steps with 31 ms gaps, which is what "it drops frames" looked like. A delay
+/// well under one tick lands on every tick (and on every high-resolution wake-up when Chromium has
+/// them on): 20 steps, no gap over 16 ms. A step that would not move the card is dropped in
+/// `overlays::set_sidebar_hover_slide`, and a step that does is cheap — the card is moved and
+/// clipped, its page is never resized (`overlays::layout_overlay`).
+const SLIDE_STEP_MS: i64 = 4;
 
 /// The animation key whose exit fade the toast plays.
 pub const TOAST_KEY: &str = "overlays.toast";
@@ -160,6 +164,11 @@ struct Slide {
     to: i32,
     ms: i64,
     started: Instant,
+    /// When the last step ran, how many ran, and the longest wait between two of them: what
+    /// `debug.info.motion.lastSlide` reports, because "did it stutter" is a number, not an opinion.
+    last_step: Instant,
+    steps: u32,
+    max_gap_ms: i64,
     /// Runs when the card has arrived (never when the slide is cancelled).
     done: Option<Box<dyn FnOnce()>>,
 }
@@ -167,6 +176,8 @@ struct Slide {
 thread_local! {
     static SLIDE: RefCell<Option<Slide>> = const { RefCell::new(None) };
     static SLIDE_GEN: Cell<u64> = const { Cell::new(0) };
+    /// The last slide that arrived: `(steps, ms, longest gap between two steps in ms)`.
+    static LAST_SLIDE: Cell<(u32, i64, i64)> = const { Cell::new((0, 0, 0)) };
 }
 
 /// Slides the floating sidebar host from `from` to `to` over `ms`, then runs `done`. The offset is
@@ -185,15 +196,21 @@ pub fn slide_sidebar(from: i32, to: i32, ms: i64, done: impl FnOnce() + 'static)
     }
     let generation = SLIDE_GEN.get() + 1;
     SLIDE_GEN.set(generation);
-    SLIDE.with(|s| *s.borrow_mut() = Some(Slide { generation, from, to, ms, started: Instant::now(), done: Some(Box::new(done)) }));
+    let now = Instant::now();
+    SLIDE.with(|s| {
+        *s.borrow_mut() = Some(Slide { generation, from, to, ms, started: now, last_step: now, steps: 0, max_gap_ms: 0, done: Some(Box::new(done)) })
+    });
     task::post_ui_delayed(SLIDE_STEP_MS, move || slide_step(generation));
 }
 
 fn slide_step(generation: u64) {
     let step = SLIDE.with(|s| {
-        let slide = s.borrow();
-        let slide = slide.as_ref().filter(|x| x.generation == generation)?;
+        let mut slide = s.borrow_mut();
+        let slide = slide.as_mut().filter(|x| x.generation == generation)?;
         let elapsed = slide.started.elapsed().as_millis() as i64;
+        slide.max_gap_ms = slide.max_gap_ms.max(slide.last_step.elapsed().as_millis() as i64);
+        slide.last_step = Instant::now();
+        slide.steps += 1;
         Some((slide_offset(slide.from, slide.to, elapsed, slide.ms), elapsed >= slide.ms))
     });
     let Some((dx, arrived)) = step else { return };
@@ -202,7 +219,11 @@ fn slide_step(generation: u64) {
         task::post_ui_delayed(SLIDE_STEP_MS, move || slide_step(generation));
         return;
     }
-    let done = SLIDE.with(|s| s.borrow_mut().take().and_then(|mut x| x.done.take()));
+    let done = SLIDE.with(|s| {
+        let mut finished = s.borrow_mut().take()?;
+        LAST_SLIDE.set((finished.steps, finished.started.elapsed().as_millis() as i64, finished.max_gap_ms));
+        finished.done.take()
+    });
     crate::window::schedule_draggable_regions(); // once, where the card came to rest
     if let Some(done) = done {
         done();
@@ -462,6 +483,7 @@ pub fn debug_counters() -> serde_json::Value {
         "slowestExitMs": c.slowest_ms,
         "lastExitMs": c.last_ms,
         "floorOverrideMs": floor_override(),
+        "lastSlide": { "steps": LAST_SLIDE.get().0, "ms": LAST_SLIDE.get().1, "maxGapMs": LAST_SLIDE.get().2, "stepMs": SLIDE_STEP_MS },
     })
 }
 

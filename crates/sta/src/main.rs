@@ -60,6 +60,7 @@ mod devtools;
 mod devtools_cdp;
 mod devtools_policy;
 mod devtools_shim;
+mod disk;
 mod downloads;
 mod ext_backend;
 mod ext_popup;

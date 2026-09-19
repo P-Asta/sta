@@ -209,6 +209,12 @@ pub enum Command {
     /// Open (or re-target) the command bar. `EditUrl` prefills the focused tab's URL (no tab →
     /// behaves as `NewTab`). `split_side` is used by `Split` mode (default Right).
     OpenCommandBar { mode: CommandBarMode, #[serde(default)] split_side: Option<SplitSide> },
+    /// What the **keyboard** sends for Ctrl+T, Ctrl+L / Alt+D / F6 and Ctrl+E: the same shortcut
+    /// pressed again closes what it opened. A bar open in the same mode (`EditUrl` with no tab counts
+    /// as `NewTab`, like `OpenCommandBar`) is closed exactly as `CloseCommandBar` closes it; anything
+    /// else — no bar, or a bar in another mode — is `OpenCommandBar {mode}`. Buttons keep sending
+    /// `OpenCommandBar`: a click always opens.
+    ToggleCommandBar { mode: CommandBarMode },
     /// Esc, blur, or click outside. Refocuses the focused tab.
     ///
     /// `seq` is the `commandBar.seq` the page was showing when it decided to close. A close whose
@@ -239,8 +245,14 @@ pub enum Command {
     /// (the shell's Esc chain, after page fullscreen, Peek, find bar, switcher and command bar).
     CloseSidebarPanel,
     OpenInternalPage { page: InternalPage },
-    /// Ctrl+F: open the find bar for the focused tab (re-focus/select if already open).
+    /// Open the find bar for the focused tab (re-focus/select if already open).
     OpenFind,
+    /// Ctrl+F: `OpenFind`, or `CloseFind` when the find bar is already open **for the focused tab**
+    /// (a bar left open on another tab is re-targeted, not closed).
+    ToggleFind,
+    /// Ctrl+, / Ctrl+H: `OpenInternalPage`, or — when that page is the focused tab already — close it
+    /// (`CloseItem`), so the key that showed the page puts it away again.
+    ToggleInternalPage { page: InternalPage },
     CloseFind,
     /// Search in `tab` (or the find bar's tab / focused tab). Core remembers `text`/`match_case`
     /// for that tab so `FindNext` works.
@@ -457,6 +469,11 @@ pub enum Command {
     ExtensionInstalled { id: String, name: String, #[serde(default)] external: bool },
     /// The shell refused a Chrome-created browser (toast only).
     ForeignBlocked { reason: ForeignBlockReason },
+    /// The volume that holds the profile is nearly full while a Chrome Web Store page is open
+    /// (`crates/sta/src/disk.rs`). Toast, once per run: Chromium unpacks an extension into the
+    /// profile and reports a full disk as "Could not unzip extension" / "Package is invalid", which
+    /// sends people looking for a bug in the extension (AdBlock unpacks to 340 MB).
+    LowDiskSpace { free_mb: u64 },
 
     // ------------------------------------------------------------------ updates
     /// Look for a newer release now (Settings › About). The shell answers with
@@ -576,6 +593,7 @@ impl Command {
                 | Command::ForeignTabRequested { .. }
                 | Command::ExtensionInstalled { .. }
                 | Command::ForeignBlocked { .. }
+                | Command::LowDiskSpace { .. }
                 | Command::UpdateStatusChanged { .. }
                 | Command::ExtensionsChanged { .. }
                 | Command::ExtensionDetailsLoaded { .. }

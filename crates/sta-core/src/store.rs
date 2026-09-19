@@ -182,6 +182,8 @@ struct Runtime {
     external_announced: bool,
     /// The Web Store's "Switch to Chrome" notice was already answered this run.
     web_store_noted: bool,
+    /// The low-disk-space toast was shown in this run (`Command::LowDiskSpace`).
+    low_disk_noted: bool,
     /// sta started in safe mode (two crashes; R-SEC-11).
     safe_mode: bool,
 }

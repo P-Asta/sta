@@ -21,7 +21,7 @@ export const SHELL_ONLY_COMMANDS = new Set([
   'permissionRequested', 'permissionDismissed', 'downloadUpdated', 'downloadInBlankTab', 'windowStateChanged',
   'systemThemeChanged', 'systemAnimationsChanged', 'windowCloseRequested', 'tick',
   // Chrome-created browsers (foreign.rs)
-  'foreignTabRequested', 'extensionInstalled', 'foreignBlocked',
+  'foreignTabRequested', 'extensionInstalled', 'foreignBlocked', 'lowDiskSpace',
   // docked DevTools (devtools.rs)
   'devToolsClosed', 'devToolsUndockRequested', 'devToolsLinkRequested', 'inspectElement',
   // extensions (extensions.rs, ext_backend.rs, ext_popup.rs)
@@ -109,6 +109,7 @@ export const COMMAND_FIELDS = Object.freeze({
   expandPeek: {},
   // command bar
   openCommandBar: { mode: ['newTab', 'editUrl', 'split', 'actions', 'extensions'] },
+  toggleCommandBar: { mode: ['newTab', 'editUrl', 'split', 'actions', 'extensions'] },
   closeCommandBar: {},
   commitOmnibox: { command: 'command' },
   // other surfaces & chrome
@@ -119,6 +120,8 @@ export const COMMAND_FIELDS = Object.freeze({
   closeSidebarPanel: {},
   openInternalPage: { page: ['settings', 'archive', 'history', 'boosts'] },
   openFind: {},
+  toggleFind: {},
+  toggleInternalPage: { page: ['settings', 'archive', 'history', 'boosts'] },
   closeFind: {},
   findInPage: { text: 'string' },
   findNext: {},
@@ -1103,6 +1106,12 @@ export const reducers = {
       seq: ctx.nextSeq(),
     };
   },
+  // The keyboard's form: the shortcut that opened the bar closes it (`Command::ToggleCommandBar`).
+  toggleCommandBar: (ctx, { mode }) => {
+    const effective = mode === 'editUrl' && !ctx.state.current ? 'newTab' : mode;
+    if (ctx.state.commandBar?.mode === effective) ctx.apply({ type: 'closeCommandBar' });
+    else ctx.apply({ type: 'openCommandBar', mode });
+  },
   closeCommandBar: (ctx, { seq }) => {
     // A stale close (the page asked to close the bar it was showing, but a newer one is open) is
     // ignored, exactly as `Command::CloseCommandBar` does (docs/PROTOCOL.md §8, §14).
@@ -1153,6 +1162,15 @@ export const reducers = {
   },
   closeFind: (ctx) => {
     ctx.state.find = null;
+  },
+  toggleFind: (ctx) => {
+    const open = ctx.state.find != null && ctx.state.find.tab === ctx.state.focusedTab;
+    ctx.apply({ type: open ? 'closeFind' : 'openFind' });
+  },
+  toggleInternalPage: (ctx, { page }) => {
+    const current = ctx.state.current;
+    if (current && typeof current.url === 'string' && current.url.startsWith(`sta://${page}/`)) ctx.apply({ type: 'closeItem', id: current.tab });
+    else ctx.apply({ type: 'openInternalPage', page });
   },
   findInPage: (ctx, { tab, text, matchCase }) => {
     const state = ctx.state;

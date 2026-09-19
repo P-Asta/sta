@@ -14,7 +14,7 @@ use windows_sys::Win32::Globalization::{GetUserPreferredUILanguages, MUI_LANGUAG
 use windows_sys::Win32::Graphics::Dwm::{
     DWMWA_USE_IMMERSIVE_DARK_MODE, DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_ROUND, DwmSetWindowAttribute,
 };
-use windows_sys::Win32::Storage::FileSystem::{DELETE, FILE_FLAG_DELETE_ON_CLOSE, FILE_SHARE_READ, MoveFileExW};
+use windows_sys::Win32::Storage::FileSystem::{DELETE, FILE_FLAG_DELETE_ON_CLOSE, FILE_SHARE_READ, GetDiskFreeSpaceExW, MoveFileExW};
 use windows_sys::Win32::System::Com::{
     CLSCTX_INPROC_SERVER, COINIT_APARTMENTTHREADED, COINIT_DISABLE_OLE1DDE, CoCreateInstance, CoInitializeEx,
     CoTaskMemFree, CoUninitialize,
@@ -23,7 +23,7 @@ use windows_sys::Win32::System::Console::{ATTACH_PARENT_PROCESS, AttachConsole};
 use windows_sys::Win32::System::DataExchange::{CloseClipboard, EmptyClipboard, OpenClipboard, SetClipboardData};
 use windows_sys::Win32::System::Memory::{GMEM_MOVEABLE, GlobalAlloc, GlobalLock, GlobalUnlock};
 use windows_sys::Win32::System::Ole::CF_UNICODETEXT;
-use windows_sys::Win32::System::Registry::{HKEY_CURRENT_USER, RRF_RT_REG_DWORD, RegGetValueW};
+use windows_sys::Win32::System::Registry::{HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, RRF_RT_REG_DWORD, RRF_RT_REG_SZ, RegGetValueW};
 use windows_sys::Win32::UI::Shell::{
     FOLDERID_Downloads, FOS_FORCEFILESYSTEM, FOS_PATHMUSTEXIST, FOS_PICKFOLDERS, FileOpenDialog, ILCreateFromPathW, ILFree,
     SHCreateItemFromParsingName, SHGetKnownFolderPath, SHOpenFolderAndSelectItems, SIGDN_FILESYSPATH, ShellExecuteW,
@@ -374,6 +374,38 @@ pub fn move_dir(from: &std::path::Path, to: &std::path::Path) -> std::io::Result
     let (from, to) = (wide_path(from), wide_path(to));
     // SAFETY: valid NUL-terminated UTF-16 paths; flags 0 = no replace, no copy.
     if unsafe { MoveFileExW(from.as_ptr(), to.as_ptr(), 0) } != 0 { Ok(()) } else { Err(std::io::Error::last_os_error()) }
+}
+
+/// Where the .msi installed sta (`HKLM\Software\sta` › `InstallDir`, written by
+/// `tools/installer/sta.wxs`), or `None` when no such install is registered. A copy of sta running
+/// from that directory cannot replace its own files and updates through the next .msi
+/// (`update.rs`).
+pub fn msi_install_dir() -> Option<PathBuf> {
+    let (key, value) = (wide(r"Software\sta"), wide("InstallDir"));
+    let mut buffer = [0u16; 1024];
+    let mut size = std::mem::size_of_val(&buffer) as u32;
+    // SAFETY: valid NUL-terminated strings and an out buffer of the declared size in bytes;
+    // `RRF_RT_REG_SZ` guarantees a NUL-terminated string in it on success.
+    let status = unsafe {
+        RegGetValueW(HKEY_LOCAL_MACHINE, key.as_ptr(), value.as_ptr(), RRF_RT_REG_SZ, std::ptr::null_mut(), buffer.as_mut_ptr().cast::<c_void>(), &mut size)
+    };
+    if status != ERROR_SUCCESS {
+        return None;
+    }
+    let len = buffer.iter().position(|c| *c == 0).unwrap_or(0);
+    (len > 0).then(|| PathBuf::from(String::from_utf16_lossy(&buffer[..len])))
+}
+
+/// Bytes this user may still write on the volume that holds `dir` (quotas included), or `None`
+/// when Windows cannot say.
+pub fn free_disk_bytes(dir: &std::path::Path) -> Option<u64> {
+    use std::os::windows::ffi::OsStrExt;
+    let wide: Vec<u16> = dir.as_os_str().encode_wide().chain(std::iter::once(0)).collect();
+    let mut available: u64 = 0;
+    // SAFETY: a NUL-terminated UTF-16 directory path and one valid out pointer; the two totals are
+    // not asked for.
+    let ok = unsafe { GetDiskFreeSpaceExW(wide.as_ptr(), &mut available, std::ptr::null_mut(), std::ptr::null_mut()) };
+    (ok != 0).then_some(available)
 }
 
 /// Creates `path` and holds it open for writing, shared for reading only and deleted when the

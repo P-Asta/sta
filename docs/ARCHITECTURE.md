@@ -1271,11 +1271,17 @@ that holds a browser. Native code otherwise only *coordinates timing*.
 The one exception is the floating sidebar's own arrival and departure (§4.3): what has to travel
 there is the **card**, not what is inside it, and no page can move a native card. So the shell steps
 that one host's `x` from a card-width outside the window to its home rect. An overlay cannot hang
-outside the window — CEF fits its bounds to it — so what actually travels on screen is the card's
-**visible slice**, growing from 1 DIP at the window's left edge: the page is laid out at the width
-the card settles at and pinned to its right edge (`sidebar.css .sidebar.is-floating`,
-`--float-width`), so the contents stand still relative to the card and ride it in rather than being
-stretched into place. Each step is one 60 Hz frame, because each one resizes that page; the
+outside the window — CEF fits its bounds to it — so the *host* is cut down to the slice that is
+inside the window, growing from 1 DIP at the window's left edge, and the **card inside it is not**:
+the host's contents are a clip panel (`rounded::clip_root`) whose box layout has a negative left
+inset (`set_clip_cut`), so the card keeps its settled size, sits `cut` DIP left of the host and is
+clipped by Views. The page is therefore **moved, never resized**, during a slide. (The first cut
+resized it — every step was a new viewport for the renderer to lay out and raster before the
+compositor could show it, ~146 `resize` events per reveal-and-leave, and the slide visibly dropped
+frames. `sidebar.css .sidebar.is-floating` still pins the contents to `--float-width` for the one
+frame in which the view is parked.) The steps are asked for every 4 ms, not every 16: Windows runs
+delayed tasks on its 15.6 ms tick, a 16 ms delay lands on every second tick, and a 160 ms slide got
+7 steps with 31 ms gaps; now it gets ~20 and no gap over 16 ms (`debug.info.motion.lastSlide`). The
 draggable regions are rescheduled once, where the card lands; and the hover keep zone stays at the
 card's home rect, so the pointer's meaning never moves with it.
 

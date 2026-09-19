@@ -1110,7 +1110,7 @@ async function main() {
     await inst.focus({ surface: 'empty' });
     const d = await countDelta(() => inst.keys('ctrl+t'), 100);
     const i = await waitOverlay('CommandBar');
-    check('o.command', 'real Ctrl+T dispatches openCommandBar once and shows the bar', d('openCommandBar') === 1 && i, { openCommandBar: d('openCommandBar') });
+    check('o.command', 'real Ctrl+T dispatches toggleCommandBar once and shows the bar', d('toggleCommandBar') === 1 && i, { toggleCommandBar: d('toggleCommandBar') });
     const bar = overlay(i, 'CommandBar');
     const [cx, cy, cw, ch] = i.window.contentRect;
     const [x, y, w, h] = bar.bounds;
@@ -1621,8 +1621,9 @@ async function main() {
   // ---------------------------------------------------------------- (k) keyboard matrix
   await section('k', async () => {
     const KEYS = [
-      ['ctrl+t', 'openCommandBar'],
-      ['ctrl+l', 'openCommandBar'],
+      // The keyboard sends the toggling forms: the same key again closes what it opened.
+      ['ctrl+t', 'toggleCommandBar'],
+      ['ctrl+l', 'toggleCommandBar'],
       ['ctrl+w', 'closeItem'],
       ['ctrl+s', 'toggleSidebar'],
       ['alt+1', 'switchSpaceNth'],
@@ -1705,7 +1706,7 @@ async function main() {
     await sleep(300);
     await focusRole(`Tab(${peekTab})`);
     d = await countDelta(() => inst.keys('ctrl+f'));
-    check('k', 'Peek tab: real Ctrl+F → find bar over Peek, Peek stays open', d('openFind') === 1 && (await waitOverlay('FindBar')) && overlay(await inst.info(), 'Peek').visible);
+    check('k', 'Peek tab: real Ctrl+F → find bar over Peek, Peek stays open', d('toggleFind') === 1 && (await waitOverlay('FindBar')) && overlay(await inst.info(), 'Peek').visible);
     d = await countDelta(() => inst.keys('escape'));
     check('k', 'find bar over Peek: real Esc closes only the find bar', d('closeFind') === 1 && d('closePeek') === 0 && overlay(await inst.info(), 'Peek').visible, { closeFind: d('closeFind'), closePeek: d('closePeek') });
     await focusRole(`Tab(${peekTab})`);
@@ -1933,15 +1934,20 @@ async function main() {
     const shown = async () => (await hv()).overlayVisible;
     const sidebarRect = async (selector) => JSON.parse(await inst.eval(SB, `JSON.stringify((() => { const r = document.querySelector(${j(selector)}).getBoundingClientRect(); return [r.x, r.y, r.width, r.height]; })())`));
     const away = () => inst.hover({ pointer: { x: 700, y: 300 } });
-    /** Pointer away first (a reveal needs the pointer to have left the edge), then at the edge. */
+    /**
+     * Pointer away first (a reveal needs the pointer to have left the edge), then at the edge —
+     * and **until the card is home**. "Visible" is the first frame of the slide, with the card still
+     * outside the window: a click sent then lands on the page, and the host's bounds are the 1 DIP
+     * slice (which is what the F11 and the right-click checks used to read).
+     */
     const reveal = async (x = 6) => {
       await away();
       await sleep(250);
       await inst.hover({ pointer: { x, y: 300 } });
       return waitFor(async () => {
         const i = await inst.info();
-        return i.sidebarHover.overlayVisible && i;
-      }, 2000, 30);
+        return i.sidebarHover.overlayVisible && !i.sidebarHover.sliding && i.sidebarHover.slideDx === 0 && i;
+      }, 3000, 30);
     };
     const hideNow = async () => {
       await away();
@@ -1986,6 +1992,7 @@ async function main() {
     await inst.capture('w-hover-hidden');
 
     // 2. Resting at the edge reveals it; the page keeps keyboard focus and sees no blur.
+    await inst.eval(SB, `(() => { window.__slideWidths = []; addEventListener('resize', () => window.__slideWidths.push(innerWidth)); return true; })()`);
     await inst.hover({ pointer: { x: 6, y: 300 } });
     const t0 = Date.now();
     i = await waitFor(async () => {
@@ -2001,6 +2008,12 @@ async function main() {
       return !x.sidebarHover.sliding && x.sidebarHover.slideDx === 0 ? x : null;
     }, 3000, 15);
     check(H, 'the card slides in from outside the window: shown a full card-width out, then home', startDx <= -(width + 8) && Boolean(arrived), { startDx, width, arrived: Boolean(arrived) });
+    // The card is moved and clipped, never resized: a slide that resizes its page gives the renderer
+    // a new viewport to lay out and raster on every step, and drops frames doing it (it used to:
+    // ~70 `resize` events per slide, widths from 6 px up).
+    const slideWidths = JSON.parse(await inst.eval(SB, 'JSON.stringify(window.__slideWidths)'));
+    const lastSlide = arrived && arrived.motion.lastSlide;
+    check(H, 'the slide never resizes the sidebar page, and no two steps are more than a frame and a half apart', slideWidths.every((w) => w === width) && !!lastSlide && lastSlide.steps >= 8 && lastSlide.maxGapMs <= 40, { slideWidths, lastSlide });
     i = arrived || i;
     const host = i && overlay(i, 'SidebarHover');
     check(H, 'resting at the edge reveals the floating sidebar card at {8, 8, width + 8, height - 16} after the dwell (the page keeps the width)', host && j(host.bounds) === j([8, 8, width + 8, winH - 16]) && host.viewRect && host.viewRect[2] === width && latency >= 100 && latency < 800, host && { bounds: host.bounds, page: host.viewRect, width, winH, latency });

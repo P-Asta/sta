@@ -899,6 +899,7 @@ wrap_display_handler! {
             }
             // A real document committed: the error page (if any) is gone.
             ERROR_PAGES.with(|e| e.borrow_mut().remove(&browser.identifier()));
+            crate::disk::on_tab_address(&url);
             controller::dispatch(Command::TabAddressChanged { tab, url });
         }
 

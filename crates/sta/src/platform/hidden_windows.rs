@@ -24,9 +24,11 @@
 //! - `pub fn describe(hwnd: isize) -> WindowDescription`
 //! - `pub fn set_native_caption(hwnd: isize, dark: bool)` — kept-native windows: dark caption
 //! - `pub fn set_sta_owned_listener(f: fn(isize))` — a window owned by sta's main window was shown
+//! - `pub fn set_owner(hwnd: isize, owner: isize) -> bool` — re-own a top-level window
 //! - `pub fn allow_dialogs(root: isize, allow: bool)` / `pub fn set_dialog_listener(f: fn(isize))` — a
 //!   hidden root whose **one owned dialog** is left alone (shown, activatable, foreground) while its
-//!   window itself stays cloaked: the one operation that needs it is removing an extension, where
+//!   window itself stays unshown (and un-cloaked for that long: an owned window inherits its owner's
+//!   cloak): the one operation that needs it is removing an extension, where
 //!   Chromium always shows its own "Remove …?" confirmation (`ext_backend.rs`, gate S7). A second
 //!   window the same root opens is cloaked and refused like any other (SEC-P3-4)
 //! - `pub fn move_window(hwnd: isize, x: i32, y: i32)`, `pub fn window_rect(hwnd: isize) -> Option<[i32; 4]>`,
@@ -41,9 +43,9 @@ use windows_sys::Win32::Graphics::Gdi::{GetMonitorInfoW, MONITOR_DEFAULTTONEARES
 use windows_sys::Win32::UI::Accessibility::{HWINEVENTHOOK, SetWinEventHook, UnhookWinEvent};
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     CBT_CREATEWNDW, CallNextHookEx, EVENT_OBJECT_SHOW, EVENT_SYSTEM_FOREGROUND, GA_ROOT, GW_OWNER, GWL_EXSTYLE, GWL_STYLE,
-    GetAncestor, GetClassNameW, GetWindow, GetWindowLongPtrW, GetWindowRect, HCBT_ACTIVATE, InternalGetWindowText, HCBT_CREATEWND,
-    HHOOK, IsWindow, IsWindowVisible, SWP_NOACTIVATE, SWP_NOSIZE, SWP_NOZORDER, SetForegroundWindow, SetWindowPos,
-    SetWindowsHookExW, UnhookWindowsHookEx, WH_CBT, WINEVENT_OUTOFCONTEXT, WS_CHILD,
+    GWLP_HWNDPARENT, GetAncestor, GetClassNameW, GetWindow, GetWindowLongPtrW, GetWindowRect, HCBT_ACTIVATE, InternalGetWindowText,
+    HCBT_CREATEWND, HHOOK, IsWindow, IsWindowVisible, SWP_NOACTIVATE, SWP_NOSIZE, SWP_NOZORDER, SetForegroundWindow,
+    SetWindowLongPtrW, SetWindowPos, SetWindowsHookExW, UnhookWindowsHookEx, WH_CBT, WINEVENT_OUTOFCONTEXT, WS_CHILD,
 };
 
 /// `OBJID_WINDOW`: WinEvents about the window itself (not a child object).
@@ -166,17 +168,42 @@ fn is_cloaked(hwnd: isize) -> bool {
 /// every other owned window, so a page that opens a second window cannot put it on screen (SEC-P3-4).
 /// Cleared as soon as the operation that needed it is over — a window that keeps this is a window that
 /// can put something on screen sta never asked for.
+///
+/// **The root is un-cloaked while it allows a dialog.** DWM hands a window's cloak down to every
+/// window it owns (`DWM_CLOAKED_INHERITED`), and that cannot be lifted on the owned window: a dialog
+/// of a cloaked root exists, is `WS_VISIBLE`, takes the foreground — and is drawn nowhere, so nobody
+/// could ever answer it. The root stays off screen all the same because it is never *shown* (it has
+/// no `WS_VISIBLE`; `ext_backend` aborts the operation if that ever changes), and it is cloaked again
+/// the moment the exemption ends.
 pub fn allow_dialogs(root: isize, allow: bool) {
-    let _ = DIALOG_ROOTS.with(|d| {
-        d.try_borrow_mut().map(|mut d| {
-            if allow {
-                d.entry(root).or_insert(0);
-            } else {
-                d.remove(&root);
-            }
-        })
+    let known = DIALOG_ROOTS.with(|d| {
+        d.try_borrow_mut()
+            .map(|mut d| {
+                if allow {
+                    d.entry(root).or_insert(0);
+                    true
+                } else {
+                    d.remove(&root).is_some()
+                }
+            })
+            .unwrap_or(false)
     });
+    if known && is_window(root) {
+        set_cloak(root, !allow);
+    }
     record(if allow { "dialogs-allowed" } else { "dialogs-refused" }, root, serde_json::Value::Null);
+}
+
+/// Makes `owner` the Win32 owner of the top-level window `hwnd`: it then stays above `owner`, is
+/// minimized with it, and no longer inherits anything (the cloak) from the window that created it.
+pub fn set_owner(hwnd: isize, owner: isize) -> bool {
+    if !is_window(hwnd) || !is_window(owner) || hwnd == owner {
+        return false;
+    }
+    // SAFETY: plain Win32 call on two live top-level windows of this process; for a top-level window
+    // `GWLP_HWNDPARENT` is its owner.
+    unsafe { SetWindowLongPtrW(hwnd as HWND, GWLP_HWNDPARENT, owner) };
+    owner_of(hwnd) == owner
 }
 
 /// The first window a dialog-allowing root creates is the dialog sta waits for; a later one is only

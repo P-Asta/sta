@@ -1,7 +1,9 @@
 name: Release
 
-# A `vX.Y.Z` tag builds the browser, packages it and leaves a **draft** release holding the
-# archives and `latest.json`. Nothing updates until a person publishes that draft: the in-app
+# A `vX.Y.Z` tag builds the browser, packages it and leaves a **draft** release holding, per
+# platform, the **installer** people download (`.msi` on Windows, `.dmg` on macOS — one file, one
+# double-click), the `.zip` archive (the portable build, and what the in-app updater of a portable
+# or macOS copy applies) and `latest.json`. Nothing updates until a person publishes that draft: the in-app
 # updater reads `releases/latest/download/latest.json`, and GitHub does not serve drafts there
 # (docs/RELEASING.md).
 #
@@ -158,14 +160,37 @@ jobs:
           fi
           ls -lh "${{ steps.stage.outputs.archive }}"
 
+      # The installer is built from the same staged directory the archive was made from, so the two
+      # can never disagree about what a release contains.
+      - name: WiX (Windows installer toolset)
+        if: runner.os == 'Windows'
+        run: dotnet tool install --global wix --version 5.0.2
+
+      - name: Installer (.msi)
+        id: msi
+        if: runner.os == 'Windows'
+        run: node tools/package-release.mjs msi --dir "dist/${{ steps.stage.outputs.name }}"
+
+      - name: Installer (.dmg)
+        id: dmg
+        if: runner.os == 'macOS'
+        run: node tools/package-release.mjs dmg --dir "dist/${{ steps.stage.outputs.name }}"
+
       - name: Manifest entry for this platform
         run: node tools/package-release.mjs manifest --archive "dist/${{ steps.stage.outputs.archive }}" --out "dist/latest-${{ matrix.label }}.json"
+
+      # A copy the .msi installed updates through the next .msi (it cannot write to Program Files),
+      # so the installer gets its own entry, `windows-x86_64-msi`, in the same file.
+      - name: Manifest entry for the .msi
+        if: runner.os == 'Windows'
+        run: node tools/package-release.mjs manifest --archive "dist/${{ steps.msi.outputs.installer }}" --out "dist/latest-${{ matrix.label }}.json"
 
       - uses: actions/upload-artifact@v4
         with:
           name: sta-${{ matrix.label }}
           path: |
             dist/${{ steps.stage.outputs.archive }}
+            dist/${{ steps.msi.outputs.installer || steps.dmg.outputs.installer }}
             dist/latest-${{ matrix.label }}.json
           if-no-files-found: error
           retention-days: 7
@@ -227,7 +252,7 @@ jobs:
         env:
           NOTES: ${{ steps.changelog.outputs.notes }}
 
-      - name: Draft release with the archives
+      - name: Draft release with the installers and the archives
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.event.inputs.tag || github.ref_name }}
@@ -236,6 +261,8 @@ jobs:
           prerelease: ${{ contains(github.event.inputs.tag || github.ref_name, '-') }}
           fail_on_unmatched_files: true
           files: |
+            dist/*.msi
+            dist/*.dmg
             dist/*.zip
             dist/latest.json
           body: |
@@ -243,11 +270,19 @@ jobs:
 
             ---
 
-            **Install**: download the archive for your platform and unpack it anywhere — then run
-            `sta.exe` (Windows) or open `sta.app` (macOS). There is no installer yet, and the build
-            is not code-signed: SmartScreen asks once on Windows, and on macOS open it from the
-            right-click menu the first time (Gatekeeper refuses a double-click on an unsigned app).
+            **Install**
+            - **Windows**: download the `.msi` and double-click it. It installs into
+              `C:\Program Files\sta`, adds a Start menu entry and starts sta. Installing a newer
+              `.msi` upgrades the old one in place.
+            - **macOS**: download the `.dmg`, open it and drag **sta** onto **Applications**.
+            - The `.zip` files are the same build without an installer: unpack anywhere and run
+              `sta.exe` / open `sta.app`.
+
+            Nothing here is code-signed yet: SmartScreen asks once on Windows ("More info" › "Run
+            anyway"), and on macOS open the app from the right-click menu the first time
+            (Gatekeeper refuses a double-click on an unsigned app).
 
             **Updating**: sta checks this release a few seconds after it starts and offers the new
-            version (Settings › About). Publishing this draft is what makes that happen — while it
-            stays a draft, nobody is offered it.
+            version (Settings › About). An installed copy updates through the new `.msi` (one
+            elevation prompt), a portable or macOS copy through the `.zip`. Publishing this draft is
+            what makes that happen — while it stays a draft, nobody is offered it.

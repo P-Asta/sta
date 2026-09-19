@@ -243,7 +243,7 @@ impl Store {
     }
 
     /// An open tab showing an internal page with the same host as `url`.
-    fn find_internal_tab(&self, url: &str) -> Option<Id> {
+    pub(super) fn find_internal_tab(&self, url: &str) -> Option<Id> {
         let host = url::Url::parse(url).ok()?.host_str()?.to_string();
         let mut candidates: Vec<Id> = self.state.favorites.clone();
         for s in &self.state.spaces {

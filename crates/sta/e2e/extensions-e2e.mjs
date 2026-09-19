@@ -881,9 +881,20 @@ async function main() {
       const owned = await inst.ownedWindows({ any: true });
       return owned.length ? owned : null;
     }, 15000, 250);
-    check('g', "Chromium's own remove confirmation is shown, owned by the hidden backend window", !!dialogs && dialogs.length === 1, dialogs);
+    check('g', "Chromium's own remove confirmation is shown", !!dialogs && dialogs.length === 1, dialogs);
+    // "Shown" is not "on screen": a window owned by a cloaked window inherits the cloak, and for a
+    // whole release this dialog existed, held the foreground and was drawn nowhere. It has to be
+    // un-cloaked, and sta's own window has to own it, or the first click on sta buries it.
+    const mainHwnd = (await inst.win('info')).hwnd;
+    const onScreen = await waitFor(async () => {
+      const w = (await inst.ownedWindows({ any: true }))[0];
+      return w && w.cloaked === false && w.owner === mainHwnd ? w : null;
+    }, 5000, 200);
+    check('g', 'and a person can see it: not cloaked, and owned by sta so it stays above sta', !!onScreen, onScreen || (await inst.ownedWindows({ any: true })));
     const backendWindow = (await inst.info(['extBackend'])).extBackend.current;
-    check('g', 'and the backend window itself stayed cloaked', !!backendWindow && backendWindow.window && backendWindow.window.cloaked === true, backendWindow && backendWindow.window);
+    // Not "cloaked": the cloak is lifted while the dialog is awaited (it would hide the dialog too).
+    // What keeps the backend window off screen is that it is never shown.
+    check('g', 'and the backend window itself is still not shown', !!backendWindow && backendWindow.window && backendWindow.window.visible === false, backendWindow && backendWindow.window);
     if (dialogs) {
       await sleep(900); // Chromium's input-protection delay
       const pressed = await inst.acceptDialog('enter', dialogs[0].hwnd);

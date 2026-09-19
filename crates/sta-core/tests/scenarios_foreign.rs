@@ -280,11 +280,27 @@ fn shell_events_are_refused_from_the_ui() {
         foreign("https://a.com/", None),
         Command::ExtensionInstalled { id: EXT.into(), name: "x".into(), external: false },
         Command::ForeignBlocked { reason: ForeignBlockReason::Incognito },
+        Command::LowDiskSpace { free_mb: 342 },
     ] {
         assert!(!cmd.allowed_from_ui(), "{cmd:?}");
         let wrapped = Command::CommitOmnibox { command: Box::new(cmd.clone()), alt: false };
         assert!(!wrapped.allowed_from_ui(), "{cmd:?} inside commitOmnibox");
     }
+}
+
+/// A full disk makes Chromium fail an install with "Could not unzip extension"; the shell reports
+/// the disk when a store page opens, and core says it once — every later store page would only
+/// repeat a toast the user has already read.
+#[test]
+fn a_nearly_full_disk_is_said_once_per_run() {
+    let mut h = Harness::new();
+    h.apply(Command::LowDiskSpace { free_mb: 342 });
+    let toast = h.toast().expect("a toast");
+    assert!(toast.message.contains("342 MB") && toast.message.contains("Could not unzip extension"), "{}", toast.message);
+    assert!(toast.duration_ms > 2500, "it explains an error, so it stays up longer than a plain toast");
+    h.apply(Command::DismissToast { id: toast.id });
+    h.apply(Command::LowDiskSpace { free_mb: 120 });
+    assert!(h.toast().is_none(), "the second report in one run is silent");
 }
 
 #[test]

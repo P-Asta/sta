@@ -423,6 +423,16 @@ pub fn show_error_box(title: &str, message: &str) {
 
 // --------------------------------------------------------------------------- files
 
+/// There is no .msi on macOS: the app bundle is what is installed, and it is replaced whole.
+pub fn msi_install_dir() -> Option<PathBuf> {
+    None
+}
+
+/// Not asked on macOS (no `statvfs` without a new dependency): the low-disk notice is Windows-only.
+pub fn free_disk_bytes(_dir: &Path) -> Option<u64> {
+    None
+}
+
 /// A directory rename that never replaces an existing target (`rename(2)` would replace an empty
 /// one, and merge nothing into a non-empty one).
 pub fn move_dir(from: &Path, to: &Path) -> std::io::Result<()> {

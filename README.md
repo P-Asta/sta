@@ -5,6 +5,12 @@
 > Arc 브라우저의 핵심 경험을 Chromium 152 엔진 위에 구현했습니다. Claude Code 같은 AI 에이전트가 MCP로
 > 브라우저를 안전하게 쓸 수 있습니다([한국어 안내](docs/MCP.ko.md)).
 >
+> **설치**: [Releases](https://github.com/P-Asta/sta/releases/latest)에서 파일 하나만 받으면 됩니다 —
+> Windows는 **`.msi`**(더블클릭 → `C:\Program Files\sta`에 설치, 시작 메뉴 등록, 설치 후 자동 실행, 새 `.msi`로
+> 덮어쓰면 업그레이드), macOS는 **`.dmg`**(열어서 sta를 Applications로 드래그). 설치 없이 쓰려면 `.zip`을 풀어
+> `sta.exe`/`sta.app`을 실행하세요. 코드 서명이 없어서 처음 한 번은 SmartScreen/Gatekeeper가 묻습니다.
+> 설치된 sta는 새 버전을 스스로 확인하고 설정 › About에서 업데이트합니다.
+>
 > **개발자 도구**: F12를 누르면 개발자도구가 **sta 창 안에** 열립니다(별도 Chrome 창이 아닙니다).
 > 요소·스타일·콘솔·소스(중단점)·네트워크·성능·메모리, 요소 선택기(Ctrl+Shift+C), 디바이스 모드,
 > 교차 출처 iframe과 워커까지 동작하고, 드래그로 크기를 바꾸거나 개발자도구 메뉴에서 창으로
@@ -213,6 +219,11 @@ the F-keys need `fn` unless the keyboard is set to send function keys.
 | Ctrl+Shift+R, Shift+F5, Ctrl+F5 | Reload ignoring the cache |
 | F11, Alt+Shift+F | Fullscreen |
 | F12 | DevTools (docked in the window) |
+
+**Every key that turns something on turns it off again.** Ctrl+T, Ctrl+L / Alt+D / F6 and Ctrl+E close
+the command bar they opened (a bar in *another* mode is switched to that mode instead), Ctrl+F closes
+the find bar of the tab in front, Ctrl+, and Ctrl+H close the Settings / History tab when it is the
+one in front, and Ctrl+D, Ctrl+S, Ctrl+J, Alt+F, F11 and F12 always were toggles. Buttons only open.
 | Ctrl+Shift+I | DevTools: open, then focus, then close |
 
 F2 renames the item under the cursor, but it is **not** an accelerator: it is handled by the docked

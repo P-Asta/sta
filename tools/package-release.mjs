@@ -4,8 +4,17 @@
 //
 //   node tools/package-release.mjs version  [--set 1.2.3]
 //   node tools/package-release.mjs stage    [--target-dir target/release] [--out dist]
+//   node tools/package-release.mjs msi      --dir dist/sta-1.2.3-windows-x64 [--wix wix]
+//   node tools/package-release.mjs dmg      --dir dist/sta-1.2.3-darwin-arm64
 //   node tools/package-release.mjs manifest --archive dist/sta-1.2.3-windows-x64.zip [--notes "…"]
 //                                          [--out dist/latest.json] [--base <download url prefix>]
+//
+// A release carries two things per platform. The **installer** is what a person downloads: one
+// file, `sta-<version>-windows-x64.msi` (WiX, `tools/installer/sta.wxs`: per-machine, Program
+// Files, a Start menu entry, starts sta when it is done) or `sta-<version>-darwin-arm64.dmg` (the
+// app next to an Applications shortcut). The **archive** (`.zip`) is the same payload unpacked
+// anywhere — the portable build, and what the in-app updater of a portable or macOS copy applies.
+// An .msi install updates through the next .msi instead (`platforms["windows-x86_64-msi"]`).
 //
 // `stage` copies the browser and everything it needs at runtime out of a cargo target directory
 // into `<out>/<name>/`, and prints the staged directory and the archive name the workflow should
@@ -189,13 +198,93 @@ function stage(args) {
   return { version, name, dir };
 }
 
+/** The numeric `x.y.z` Windows Installer accepts (a `-beta.1` suffix is not a product version). */
+export function msiVersion(version) {
+  const m = /^(\d+)\.(\d+)\.(\d+)/.exec(version);
+  if (!m) throw new Error(`"${version}" has no x.y.z to give the installer`);
+  return `${m[1]}.${m[2]}.${m[3]}`;
+}
+
+/** `wix build` over a staged directory → `<dir>.msi` next to it. Windows only. */
+function msi(args) {
+  if (process.platform !== 'win32') throw new Error('an .msi can only be built on Windows');
+  const dir = resolve(root, args['--dir'] ?? '');
+  if (!args['--dir'] || !existsSync(join(dir, 'sta.exe'))) throw new Error('--dir <staged directory> is required and must hold sta.exe (run `stage` first)');
+  const out = `${dir}.msi`;
+  const wix = args['--wix'] ?? 'wix';
+  const version = msiVersion(workspaceVersion());
+  const built = spawnSync(
+    wix,
+    [
+      'build', join(root, 'tools', 'installer', 'sta.wxs'),
+      '-arch', 'x64',
+      '-d', `Version=${version}`,
+      '-d', `Icon=${join(root, 'crates', 'sta', 'res', 'sta.ico')}`,
+      '-bindpath', `stage=${dir}`,
+      '-o', out,
+    ],
+    { encoding: 'utf8', windowsHide: true, stdio: ['ignore', 'inherit', 'inherit'] },
+  );
+  if (built.error) throw new Error(`cannot run ${wix}: ${built.error.message} — install it with: dotnet tool install --global wix --version 5.0.2`);
+  if (built.status !== 0 || !existsSync(out)) throw new Error(`wix build failed (exit ${built.status})`);
+  rmSync(out.replace(/\.msi$/, '.wixpdb'), { force: true });
+  const mb = (statSync(out).size / 1024 / 1024).toFixed(1);
+  console.log(`package-release: built ${basename(out)} (${mb} MB, product version ${version})`);
+  if (process.env.GITHUB_OUTPUT) writeFileSync(process.env.GITHUB_OUTPUT, `installer=${basename(out)}
+`, { flag: 'a' });
+  return out;
+}
+
+/** `hdiutil` over a staged directory → `<dir>.dmg`: sta.app beside an Applications shortcut. macOS only. */
+function dmg(args) {
+  if (process.platform !== 'darwin') throw new Error('a .dmg can only be built on macOS');
+  const dir = resolve(root, args['--dir'] ?? '');
+  if (!args['--dir'] || !existsSync(join(dir, 'sta.app'))) throw new Error('--dir <staged directory> is required and must hold sta.app (run `stage` first)');
+  const out = `${dir}.dmg`;
+  // A scratch folder, so the staged directory (which the .zip is made from) keeps no symlink.
+  const volume = `${dir}-dmg`;
+  rmSync(volume, { recursive: true, force: true });
+  mkdirSync(volume, { recursive: true });
+  const run = (cmd, argv) => {
+    // console-ok: macOS only; `windowsHide` is here because tools/check-no-console.mjs asks every spawn for it.
+    const r = spawnSync(cmd, argv, { encoding: 'utf8', windowsHide: true, stdio: ['ignore', 'inherit', 'inherit'] });
+    if (r.error || r.status !== 0) throw new Error(`${cmd} ${argv[0]} failed: ${r.error?.message ?? `exit ${r.status}`}`);
+  };
+  // `ditto`, not cpSync: it is the copy that keeps a bundle's modes, links and extended attributes.
+  run('ditto', [join(dir, 'sta.app'), join(volume, 'sta.app')]);
+  run('ln', ['-s', '/Applications', join(volume, 'Applications')]);
+  rmSync(out, { force: true });
+  // `hdiutil create` fails now and then with "Resource busy" on CI runners (Spotlight is indexing
+  // the folder it was just handed); the same command a moment later works.
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      run('hdiutil', ['create', '-volname', 'sta', '-srcfolder', volume, '-ov', '-format', 'UDZO', '-imagekey', 'zlib-level=9', out]);
+      break;
+    } catch (e) {
+      if (attempt >= 4) throw e;
+      console.error(`package-release: ${e.message}; trying again (${attempt}/3)`);
+      spawnSync('sleep', [String(3 * attempt)], { windowsHide: true });
+    }
+  }
+  rmSync(volume, { recursive: true, force: true });
+  const mb = (statSync(out).size / 1024 / 1024).toFixed(1);
+  console.log(`package-release: built ${basename(out)} (${mb} MB)`);
+  if (process.env.GITHUB_OUTPUT) writeFileSync(process.env.GITHUB_OUTPUT, `installer=${basename(out)}
+`, { flag: 'a' });
+  return out;
+}
+
 function manifest(args) {
   const archive = resolve(root, args['--archive'] ?? '');
   if (!archive || !existsSync(archive)) throw new Error('--archive <file> is required and must exist');
   const outFile = resolve(root, args['--out'] ?? join('dist', 'latest.json'));
   const version = workspaceVersion();
-  const { key } = platformKey();
-  const base = args['--base'] ?? `https://github.com/${process.env.GITHUB_REPOSITORY ?? 'P-Asta/Astatine'}/releases/download/v${version}`;
+  // An installer is listed beside the archive, under its own key: a copy of sta that the .msi
+  // installed cannot write to Program Files, so it updates through the next .msi
+  // (`sta_core::update::Package`). A .dmg is for people, not for the updater, and is not listed.
+  const suffix = /\.msi$/i.test(archive) ? '-msi' : '';
+  const key = `${platformKey().key}${suffix}`;
+  const base = args['--base'] ?? `https://github.com/${process.env.GITHUB_REPOSITORY ?? 'P-Asta/sta'}/releases/download/v${version}`;
 
   const existing = existsSync(outFile) ? JSON.parse(readFileSync(outFile, 'utf8')) : {};
   const next = {
@@ -227,6 +316,8 @@ const [command, ...rest] = process.argv.slice(2);
 if (import.meta.url === `file://${process.argv[1].replace(/\\/g, '/')}` || process.argv[1].endsWith('package-release.mjs')) {
   try {
     if (command === 'stage') stage(parse(rest));
+    else if (command === 'msi') msi(parse(rest));
+    else if (command === 'dmg') dmg(parse(rest));
     else if (command === 'manifest') manifest(parse(rest));
     else if (command === 'version') {
       const args = parse(rest);
@@ -234,7 +325,7 @@ if (import.meta.url === `file://${process.argv[1].replace(/\\/g, '/')}` || proce
       console.log(set && set !== 'true' ? setWorkspaceVersion(set.replace(/^v/, '')) : workspaceVersion());
     }
     else {
-      console.log('usage: package-release.mjs stage|manifest|version [options] (see the header)');
+      console.log('usage: package-release.mjs stage|msi|dmg|manifest|version [options] (see the header)');
       process.exit(command ? 1 : 0);
     }
   } catch (e) {

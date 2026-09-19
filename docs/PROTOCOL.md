@@ -282,8 +282,11 @@ its menus, popovers and drags (a press outside the floating sidebar).
 At the `full` level the **card itself travels** instead (`ARCHITECTURE` §4.3): the shell puts the
 host a whole card-width outside the window, where the window clips it to a sliver, sends
 `visible:true` with no `gen`, and slides the host home — so the page's own contents do not move
-(`.is-floating` skips the −24px slide; it lays out at `state.window.sidebarWidth` and stays pinned
-to the right edge while the visible slice grows) and a reveal needs no blank frame to start from. A hide then sends `{visible:true, dismiss:true}` (close the
+(`.is-floating` skips the −24px slide) and a reveal needs no blank frame to start from. The page is
+**not resized** while the card travels: the shell cuts the *host* down to the slice inside the window
+and keeps the card at its settled size behind a clip (`ARCHITECTURE` §4.7), so the page sees no
+`resize` events from a slide; it still lays out at `state.window.sidebarWidth`, pinned right, for the
+frame in which the view is parked. A hide then sends `{visible:true, dismiss:true}` (close the
 menus, keep the contents: they ride the card out), slides the card out of the window, hides it there
 and only then sends `visible:false` — no `gen`, because nothing of that surface is on screen to
 acknowledge. Parking a docked sidebar always uses the acknowledged exit above.
@@ -429,6 +432,9 @@ color seamlessly. Overlay pages use `--surface` with a 1px `--border`.
 {"type":"switchSpace","id":3}
 {"type":"newSpace","name":"Work","icon":"🚀","theme":{"hue":245,"hue2":275,"chroma":0.06}}
 {"type":"openCommandBar","mode":"newTab"}                          // newTab|editUrl|split|actions
+{"type":"toggleCommandBar","mode":"newTab"}                        // what the *keyboard* sends: a bar open in that mode is closed, else openCommandBar
+{"type":"toggleFind"}                                              // Ctrl+F: closeFind when the focused tab's find bar is open, else openFind
+{"type":"toggleInternalPage","page":"settings"}                    // Ctrl+, / Ctrl+H: closeItem when that page is the focused tab, else openInternalPage
 {"type":"closeCommandBar","seq":7}                                 // seq optional: a stale one is ignored (§14)
 {"type":"openSidebarPanel","panel":{"type":"editSpace","id":3}}    // downloads|appMenu|newSpace|editSpace|renameItem|editPinned
 {"type":"toggleSidebar"}                                           // docked → hidden; hidden or floating → docked
@@ -461,7 +467,7 @@ color seamlessly. Overlay pages use `--surface` with a 1px `--border`.
 ```
 
 Shell-only (never from the UI; the shell sends them, see §10, §11, §12 and §14): `systemAnimationsChanged`, `foreignTabRequested`,
-`extensionInstalled`, `foreignBlocked`, `devToolsClosed`, `devToolsUndockRequested`,
+`extensionInstalled`, `foreignBlocked`, `lowDiskSpace`, `devToolsClosed`, `devToolsUndockRequested`,
 `devToolsLinkRequested`, `inspectElement`, `extensionsChanged`, `extensionDetailsLoaded`,
 `extensionOpFailed`, `extensionPopupClosed`, `safeModeStarted`.
 
@@ -519,6 +525,7 @@ hides those windows, adopts what they wanted to show and reports it to core with
 | `foreignTabRequested` | `{url, extension?: {id, name, pages[], webAccessible[], recentlyInstalled}}` | `http(s)` with a host, and extension pages the manifest declares (options, popup, side panel), resources web-accessible to every site, or any page of an extension installed in the last 60 s: a foreground Today tab after the active item. Any other extension page: the toast "An extension wants to open a page of *name*" with **Open** (`openUrl`) — *name* is the page's **owner**, not the extension that asked (sta cannot see who asked: ARCHITECTURE §4.5 "Who asked"). Anything else: nothing. Rate limited **by what core does**: 3 tabs and 2 asks per 10 s, then the `rateLimited` toast below (once per 10 s) instead. A request core only asks about, or refuses, leaves the tab budget alone. |
 | `extensionInstalled` | `{id, name, external?}` | Toast "*name* added · Ctrl+E" (sta has no extension toolbar, so the toast says how to use it), or "*name* added by another program, off until you allow it" when another program registered it. The id may open its own pages for 60 s (welcome flows). |
 | `foreignBlocked` | `{reason: "rateLimited" \| "incognito"}` | Toast "An extension keeps opening windows; sta blocked them" / "sta has no private windows". `incognito` is the shell's private-window refusal; `rateLimited` is the flood toast — the shell sends it for a flood it drops before core hears about it (24 navigations per 10 s), and core raises the same one, with the same once-per-10 s dedupe, when a budget above runs out. |
+| `lowDiskSpace` | `{freeMb}` | Toast, once per run and for 8 s: "Only *N* MB free on this disk — extensions may fail to install (\"Could not unzip extension\")". The shell sends it when a tab lands on a Chrome Web Store page while the profile's volume has under 1 GB free (`crates/sta/src/disk.rs`): Chromium reports a full disk as an unzip or "Package is invalid" error, never as what it is. Windows only. |
 
 Extension popup windows (`_crx_…`) and sign-in flows (`identity.launchWebAuthFlow`) stay ordinary
 Chromium windows with sta's caption colors; everything else is hidden and closed again.

@@ -118,6 +118,57 @@
   width: 230px;
 }
 
+/* A slider with its value and a reset button (Appearance › Sidebar width). */
+.set-range {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.set-range input[type="range"] {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 18px;
+  margin: 0;
+  background: transparent;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.set-range input[type="range"]::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--text) 14%, transparent);
+}
+
+.set-range input[type="range"]::-webkit-slider-thumb {
+  width: 16px;
+  height: 16px;
+  margin-top: -5px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.set-range input[type="range"]:focus-visible {
+  outline: none;
+}
+
+.set-range input[type="range"]:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--accent);
+}
+
+.set-range-value {
+  flex: 0 0 auto;
+  min-width: 52px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
 .set-template {
   display: block;
   overflow: hidden;

@@ -385,6 +385,9 @@ mod win {
                 "owner": GetWindow(hwnd, GW_OWNER) as isize,
                 "visible": IsWindowVisible(hwnd) != 0,
                 "hidden": crate::platform::hidden_windows::is_hidden(hwnd as isize),
+                // DWM draws nothing for a cloaked window — its own cloak or one inherited from its
+                // owner — so "visible" alone never says a person can see it.
+                "cloaked": crate::platform::hidden_windows::describe(hwnd as isize).cloaked,
                 // The two style words: what `foreign.rs::is_install_dialog_style` reads, so an e2e can
                 // assert the signature gate S17 measured instead of guessing from the class name
                 // (Chromium's dialogs are `Chrome_WidgetWin_1` views widgets, not `#32770`).

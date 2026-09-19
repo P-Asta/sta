@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The Windows installer (WiX 5: `dotnet tool install wix`). Built by
+  `node tools/package-release.mjs msi`, which passes:
+
+    -d Version=1.2.3        the product version (numeric x.y.z, the tag's)
+    -d Icon=<path>\sta.ico  the Add/Remove Programs and shortcut icon
+    -bindpath stage=<dir>   the staged release directory (`package-release.mjs stage`)
+
+  What it is, and why:
+  - **Per-machine, into %ProgramFiles%\sta.** Password managers that pair with a desktop app check
+    who is calling; 1Password's "Add Browser" only takes a browser that is code signed or lives
+    under Program Files (docs/STATUS.md §2), and sta is not signed.
+  - **One file, no questions**: there is no UI sequence here, so a double-click shows Windows' own
+    progress box, one UAC prompt, and then sta starts (the `LaunchApp` action below).
+  - **Upgrades are major upgrades** (same `UpgradeCode`, new version): installing a newer .msi
+    removes the old files first. That is also how sta updates an installed copy of itself —
+    `crates/sta/src/update.rs` downloads the new .msi and runs
+    `msiexec /i … /passive LAUNCHAPP=1`, because it cannot write to Program Files on its own.
+  - `HKLM\Software\sta\InstallDir` is how a running sta knows it was installed by this package
+    (and must update through it) rather than unpacked from the .zip.
+
+  Never change `UpgradeCode`: it is what makes the next version an upgrade instead of a second copy.
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package Name="sta" Manufacturer="sta" Version="$(Version)" UpgradeCode="7B9D1E52-6C0A-4F3B-9A41-5D0E8C2F7A16"
+           Scope="perMachine" Compressed="yes" InstallerVersion="500">
+    <SummaryInformation Description="sta browser" Manufacturer="sta" />
+    <MajorUpgrade DowngradeErrorMessage="A newer version of sta is already installed." Schedule="afterInstallValidate" />
+    <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
+
+    <Icon Id="StaIcon" SourceFile="$(Icon)" />
+    <Property Id="ARPPRODUCTICON" Value="StaIcon" />
+    <Property Id="ARPNOMODIFY" Value="1" />
+    <Property Id="ARPURLINFOABOUT" Value="https://github.com/P-Asta/sta" />
+
+    <StandardDirectory Id="ProgramFiles6432Folder">
+      <Directory Id="INSTALLFOLDER" Name="sta" />
+    </StandardDirectory>
+
+    <Feature Id="Main" Title="sta">
+      <ComponentGroupRef Id="Payload" />
+      <ComponentRef Id="Browser" />
+      <ComponentRef Id="InstallMarker" />
+    </Feature>
+
+    <!-- Everything `stage` staged, harvested at build time; sta.exe is authored by hand below
+         because the Start menu shortcut hangs off its File element. -->
+    <ComponentGroup Id="Payload" Directory="INSTALLFOLDER">
+      <Files Include="!(bindpath.stage)\**">
+        <Exclude Files="!(bindpath.stage)\sta.exe" />
+      </Files>
+    </ComponentGroup>
+
+    <Component Id="Browser" Directory="INSTALLFOLDER" Guid="2F6E0C8B-1D34-4B7E-8E55-0A9C3D6B1F27">
+      <File Id="StaExe" Source="!(bindpath.stage)\sta.exe" KeyPath="yes">
+        <!-- Advertised: a per-machine package may not key a plain shortcut on HKCU (ICE43/ICE57). -->
+        <Shortcut Id="StartMenuShortcut" Directory="ProgramMenuFolder" Name="sta" Description="sta browser"
+                  WorkingDirectory="INSTALLFOLDER" Icon="StaIcon" Advertise="yes" />
+      </File>
+    </Component>
+
+    <Component Id="InstallMarker" Directory="INSTALLFOLDER" Guid="9C4A7D13-52E8-4F0B-B6A9-E1D7082C3B45">
+      <RegistryKey Root="HKLM" Key="Software\sta">
+        <RegistryValue Name="InstallDir" Type="string" Value="[INSTALLFOLDER]" KeyPath="yes" />
+        <RegistryValue Name="Version" Type="string" Value="$(Version)" />
+      </RegistryKey>
+    </Component>
+
+    <!-- Start sta when the install is done: after a double-click (full UI, a fresh install or an
+         upgrade), and whenever the caller asks for it — sta's own updater passes LAUNCHAPP=1 with
+         /passive. Silent installs (/qn) start nothing unless they ask. Impersonated, so the browser
+         runs as the user and not with the installer's elevated token. -->
+    <CustomAction Id="LaunchApp" Directory="INSTALLFOLDER" ExeCommand="&quot;[INSTALLFOLDER]sta.exe&quot;"
+                  Execute="immediate" Return="asyncNoWait" />
+    <InstallExecuteSequence>
+      <Custom Action="LaunchApp" After="InstallFinalize"
+              Condition="(LAUNCHAPP = 1 OR UILevel &gt; 3) AND NOT (REMOVE = &quot;ALL&quot;) AND NOT (LAUNCHAPP = 0)" />
+    </InstallExecuteSequence>
+  </Package>
+</Wix>

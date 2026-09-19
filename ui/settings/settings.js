@@ -128,6 +128,62 @@ function AppearancePicker({ value }) {
   </div>`;
 }
 
+/* The sidebar's width, 200–440 px (`sta-core/src/model.rs SIDEBAR_*_WIDTH`). The sidebar has a drag
+ * handle on its right edge too; this is the control people can *find*. It follows a drag made there
+ * (the value comes from `state.window`), and while it is being dragged itself it sends at most one
+ * command per frame — every one of them lays the whole window out again. */
+const SIDEBAR_WIDTH = { min: 200, max: 440, def: 248 };
+
+function SidebarWidth({ value }) {
+  const [draft, setDraft] = useState(value);
+  const dragging = useRef(false);
+  const frame = useRef(0);
+  const pending = useRef(null);
+  useEffect(() => {
+    if (!dragging.current) setDraft(value);
+  }, [value]);
+  useEffect(() => () => cancelAnimationFrame(frame.current), []);
+  const queue = (width) => {
+    pending.current = width;
+    if (frame.current) return;
+    frame.current = requestAnimationFrame(() => {
+      frame.current = 0;
+      if (pending.current != null) send({ type: 'setSidebarWidth', width: pending.current });
+      pending.current = null;
+    });
+  };
+  const release = () => {
+    dragging.current = false;
+  };
+  return html`<div class="set-range">
+    <input
+      type="range"
+      min=${SIDEBAR_WIDTH.min}
+      max=${SIDEBAR_WIDTH.max}
+      step="4"
+      value=${draft}
+      aria-label="Sidebar width"
+      aria-valuetext=${`${draft} pixels`}
+      onPointerDown=${() => {
+        dragging.current = true;
+      }}
+      onPointerUp=${release}
+      onPointerCancel=${release}
+      onBlur=${release}
+      onInput=${(e) => {
+        const width = Number(e.currentTarget.value);
+        setDraft(width);
+        queue(width);
+      }}
+    />
+    <span class="set-range-value">${draft} px</span>
+    <${Button} size="sm" variant="ghost" disabled=${draft === SIDEBAR_WIDTH.def} onClick=${() => {
+      setDraft(SIDEBAR_WIDTH.def);
+      queue(SIDEBAR_WIDTH.def);
+    }}>Reset<//>
+  </div>`;
+}
+
 // ------------------------------------------------------------------------------------ search
 
 function CustomSearchUrl({ value }) {
@@ -434,6 +490,13 @@ function Settings({ state }) {
             >
           </div>
           <${AppearancePicker} value=${settings.appearance} />
+        </div>
+        <div class="ip-setting is-stacked">
+          <div class="ip-setting-text">
+            <span class="ip-setting-label">Sidebar width</span>
+            <span class="ip-setting-desc">You can also drag the sidebar's right edge; double-click it to reset.</span>
+          </div>
+          <${SidebarWidth} value=${state.window?.sidebarWidth ?? SIDEBAR_WIDTH.def} />
         </div>
       <//>
 

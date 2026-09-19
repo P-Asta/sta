@@ -24,6 +24,14 @@
 //!    and starts the new build. It runs from the staging directory, never from the directory it is
 //!    replacing, which is the only reason replacing a running program's own files can work at all.
 //!
+//! **A copy the .msi installed** (`tools/installer/sta.wxs`: Program Files, where sta cannot write)
+//! takes another road from step 2 on: [`package`] sees the installer's registry mark, the download
+//! is the release's `.msi` (`platforms["windows-x86_64-msi"]`, same hash check), nothing is unpacked,
+//! and "apply" is `msiexec /i <msi> /passive /norestart LAUNCHAPP=1` — Windows Installer asks for
+//! elevation itself, replaces the files as a major upgrade once sta has quit, and starts the new
+//! build as the user. A portable copy that *cannot* write to its own directory (a .zip unpacked
+//! into Program Files by hand) is told so instead of being sent through a copy that must fail.
+//!
 //! Nothing here ever runs while the MCP test surface is armed (`STA_E2E`), and
 //! `STA_NO_UPDATE_CHECK=1` turns the startup check off for a run.
 //!
@@ -37,7 +45,7 @@
 
 use crate::{controller, paths, task};
 use cef::*;
-use sta_core::update::{Manifest, Sha256, UpdateStatus, MANIFEST_URL, MAX_ARCHIVE_BYTES, MAX_MANIFEST_BYTES};
+use sta_core::update::{Manifest, Package, Sha256, UpdateStatus, MANIFEST_URL, MAX_ARCHIVE_BYTES, MAX_MANIFEST_BYTES};
 use sta_core::Command;
 use std::cell::{Cell, RefCell};
 use std::fs::{self, File};
@@ -190,8 +198,8 @@ fn on_manifest(body: Vec<u8>) {
         LATEST.with(|l| *l.borrow_mut() = Some(manifest));
         return;
     }
-    let Some(asset) = manifest.asset() else {
-        log_info!("update: release {} has nothing for {}", manifest.version, sta_core::update::platform_key());
+    let Some(asset) = manifest.asset_for(package()) else {
+        log_info!("update: release {} has nothing for {}", manifest.version, package().key());
         report(UpdateStatus::UpToDate { checked_at: now_ms() });
         return;
     };
@@ -213,7 +221,7 @@ pub fn start_download() {
     let Some((version, url, sha256, size)) = LATEST.with(|l| {
         let latest = l.borrow();
         let manifest = latest.as_ref()?;
-        let asset = manifest.asset()?;
+        let asset = manifest.asset_for(package())?;
         Some((manifest.version.clone(), asset.url.clone(), asset.sha256.clone(), asset.size))
     }) else {
         return fail("nothing to download: check for an update first");
@@ -222,7 +230,8 @@ pub fn start_download() {
         Ok(d) => d,
         Err(e) => return fail(format!("cannot create the staging directory: {e}")),
     };
-    let path = dir.join(format!("sta-{version}.zip"));
+    let extension = if package() == Package::Msi { "msi" } else { "zip" };
+    let path = dir.join(format!("sta-{version}.{extension}"));
     let _ = fs::remove_file(&path);
     let file = match File::create(&path) {
         Ok(f) => f,
@@ -257,6 +266,12 @@ fn on_archive(version: String, path: PathBuf, digest: String, expected: String, 
         return fail(format!("the download of {version} does not match the release ({received} bytes, sha256 {digest})"));
     }
     log_info!("update: {version} downloaded and verified ({received} bytes)");
+    if is_msi(&path) {
+        // An installer is applied as it is: Windows Installer unpacks it, not sta.
+        log_info!("update: {version} is staged as {}", path.display());
+        STAGED.with(|s| *s.borrow_mut() = Some(path));
+        return report(UpdateStatus::Ready { version });
+    }
     let dir = path.with_extension(""); // …/sta-1.2.3.zip → …/sta-1.2.3
     match unpack(&path, &dir) {
         Ok(root) => {
@@ -295,10 +310,19 @@ pub fn install_now() -> bool {
         log_warn!("update: nothing is staged to install");
         return false;
     };
+    if is_msi(&source) {
+        return run_installer(&source);
+    }
     let Some(target) = install_dir() else {
         fail("cannot find the directory sta runs from");
         return false;
     };
+    // The helper below is an ordinary process: in a directory this user cannot write to it would
+    // copy nothing, start the old build again, and the same update would be offered for ever.
+    if !writable(&target) {
+        fail(format!("sta cannot write to {} — install the new version with the .msi from the release page instead", target.display()));
+        return false;
+    }
     let helper = exe_in(&source);
     if !helper.exists() {
         fail(format!("the staged build has no {}", exe_name()));
@@ -328,6 +352,60 @@ pub fn install_now() -> bool {
             fail(format!("cannot start the apply helper: {e}"));
             false
         }
+    }
+}
+
+/// How this copy was installed (see the module header): by the .msi when the installer's registry
+/// mark names the directory sta runs from, otherwise unpacked from an archive.
+fn package() -> Package {
+    let same = |a: &Path, b: &Path| {
+        let norm = |p: &Path| p.to_string_lossy().trim_end_matches(std::path::is_separator).to_lowercase();
+        norm(a) == norm(b)
+    };
+    match (crate::platform::msi_install_dir(), install_dir()) {
+        (Some(registered), Some(running)) if same(&registered, &running) => Package::Msi,
+        _ => Package::Archive,
+    }
+}
+
+fn is_msi(path: &Path) -> bool {
+    path.extension().is_some_and(|e| e.eq_ignore_ascii_case("msi"))
+}
+
+/// Whether this process may create a file in `dir` (asked by doing it).
+fn writable(dir: &Path) -> bool {
+    let probe = dir.join(format!(".sta-write-test-{}", std::process::id()));
+    let ok = File::create(&probe).is_ok();
+    let _ = fs::remove_file(&probe);
+    ok
+}
+
+/// Applies a staged `.msi`: `msiexec /i … /passive /norestart LAUNCHAPP=1`, and sta quits. Windows
+/// Installer shows its own progress box and the one elevation prompt, replaces the old version once
+/// its files are free, and starts the new `sta.exe` as the user (`LaunchApp` in `sta.wxs`). `true`
+/// when the installer was started — the shell then closes, which is what frees the files.
+fn run_installer(msi: &Path) -> bool {
+    #[cfg(windows)]
+    {
+        let system = std::env::var_os("SystemRoot").map(PathBuf::from).unwrap_or_else(|| PathBuf::from(r"C:\Windows"));
+        let msiexec = system.join("System32").join("msiexec.exe");
+        let mut command = Process::new(&msiexec);
+        command.arg("/i").arg(msi).args(["/passive", "/norestart", "LAUNCHAPP=1"]);
+        match command.spawn() {
+            Ok(child) => {
+                log_info!("update: {} /i {} started (pid {})", msiexec.display(), msi.display(), child.id());
+                true
+            }
+            Err(e) => {
+                fail(format!("cannot start the installer: {e}"));
+                false
+            }
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        fail(format!("{} is a Windows installer", msi.display()));
+        false
     }
 }
 
@@ -707,6 +785,22 @@ pub fn debug_snapshot() -> serde_json::Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// An installer is recognised by its name (it is never unpacked), and "can sta write here" is
+    /// asked by writing — which is what decides between the copy helper and an honest refusal.
+    #[test]
+    fn installers_and_unwritable_directories_are_told_apart() {
+        assert!(is_msi(Path::new(r"C:\x\updates\sta-1.2.3.msi")) && is_msi(Path::new("sta-1.2.3.MSI")));
+        assert!(!is_msi(Path::new(r"C:\x\updates\sta-1.2.3.zip")) && !is_msi(Path::new(r"C:\x\updates\sta-1.2.3")));
+        let dir = std::env::temp_dir().join(format!("sta-update-writable-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        assert!(writable(&dir));
+        assert_eq!(fs::read_dir(&dir).unwrap().count(), 0, "the probe file is removed again");
+        fs::remove_dir_all(&dir).unwrap();
+        assert!(!writable(&dir), "a directory that is not there cannot be written to");
+        // Nothing registers an .msi install for a test binary's directory.
+        assert_eq!(package(), Package::Archive);
+    }
 
     /// What `stage_archive` has to find in an unpacked release: the browser is one directory deep
     /// (`sta-<version>-<platform>/`), and on macOS one more (`sta.app/Contents/MacOS/`).

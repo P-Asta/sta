@@ -442,6 +442,19 @@ impl Store {
                 }
                 self.bump();
             }
+            Command::ToggleCommandBar { mode } => {
+                // The mode the bar would really open in (see `OpenCommandBar`).
+                let effective = match mode {
+                    CommandBarMode::EditUrl if self.focused_tab().and_then(|t| self.tab(t)).is_none() => CommandBarMode::NewTab,
+                    other => other,
+                };
+                let next = if self.rt.command_bar.as_ref().is_some_and(|c| c.mode == effective) {
+                    Command::CloseCommandBar { seq: None }
+                } else {
+                    Command::OpenCommandBar { mode, split_side: None }
+                };
+                self.handle(next, now, fx);
+            }
             Command::CloseCommandBar { seq } => {
                 // A stale close: the page asked to close the bar it was showing, but that bar is
                 // gone and a newer one is open (Esc then Ctrl+T within one push interval).
@@ -523,6 +536,18 @@ impl Store {
             Command::OpenInternalPage { page } => {
                 let typed = self.rt.omnibox_commit;
                 self.open_url(page.url().to_string(), OpenTarget::NewTab, None, typed, now, fx);
+            }
+            Command::ToggleFind => {
+                let open_here = self.rt.find.as_ref().map(|f| f.tab) == self.focused_tab() && self.rt.find.is_some();
+                self.handle(if open_here { Command::CloseFind } else { Command::OpenFind }, now, fx);
+            }
+            Command::ToggleInternalPage { page } => {
+                let showing = self.focused_tab().filter(|t| self.find_internal_tab(page.url()) == Some(*t));
+                let next = match showing {
+                    Some(t) => Command::CloseItem { id: Some(t) },
+                    None => Command::OpenInternalPage { page },
+                };
+                self.handle(next, now, fx);
             }
             Command::OpenFind => {
                 let Some(t) = self.focused_tab().filter(|t| self.is_live(*t)) else { return };
@@ -756,9 +781,10 @@ impl Store {
             | Command::InspectElement { .. }) => self.handle_devtools(cmd, now, fx),
 
             // -------------------------------------------------------------- Chrome-created browsers
-            cmd @ (Command::ForeignTabRequested { .. } | Command::ExtensionInstalled { .. } | Command::ForeignBlocked { .. }) => {
-                self.handle_foreign(cmd, now, fx)
-            }
+            cmd @ (Command::ForeignTabRequested { .. }
+            | Command::ExtensionInstalled { .. }
+            | Command::ForeignBlocked { .. }
+            | Command::LowDiskSpace { .. }) => self.handle_foreign(cmd, now, fx),
 
             // -------------------------------------------------------------- extensions (Ctrl+E)
             cmd @ (Command::RunExtension { .. }
@@ -847,6 +873,9 @@ impl Store {
             Some((Parent::Pinned(_) | Parent::Folder(_), _)) => {
                 let space = self.space_of(t).unwrap_or(self.active_space_id());
                 self.move_to(t, Parent::Today(space), Some(0));
+                // Said out loud like "Pinned" is: a second Ctrl+D that seems to do nothing reads as
+                // a shortcut that does not toggle.
+                self.toast("Unpinned", None);
             }
             Some((Parent::Favorites, _)) => {
                 let space = self.active_space_id();

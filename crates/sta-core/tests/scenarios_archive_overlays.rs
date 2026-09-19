@@ -524,6 +524,67 @@ fn page_fullscreen() {
 
 // ------------------------------------------------------------------------------------ command bar
 
+/// "Press it again to put it away": the keyboard sends the toggling forms, and each closes exactly
+/// what the same key opened — never a bar in another mode, never a find bar of another tab.
+#[test]
+fn the_shortcut_that_opened_something_closes_it() {
+    let mut h = Harness::new();
+    // Ctrl+L with no tab opens the bar as NewTab, and Ctrl+L again closes that bar.
+    h.apply(Command::ToggleCommandBar { mode: CommandBarMode::EditUrl });
+    assert_eq!(h.ui().command_bar.unwrap().mode, CommandBarMode::NewTab);
+    h.apply(Command::ToggleCommandBar { mode: CommandBarMode::EditUrl });
+    assert!(h.ui().command_bar.is_none());
+
+    let a = h.open("https://a.com/");
+    // Ctrl+T, Ctrl+T.
+    h.apply(Command::ToggleCommandBar { mode: CommandBarMode::NewTab });
+    assert_eq!(h.ui().command_bar.unwrap().mode, CommandBarMode::NewTab);
+    h.apply(Command::ToggleCommandBar { mode: CommandBarMode::NewTab });
+    assert!(h.ui().command_bar.is_none());
+    // Ctrl+T, then Ctrl+E: another mode re-targets the bar; Ctrl+E again closes it.
+    h.apply(Command::ToggleCommandBar { mode: CommandBarMode::NewTab });
+    h.apply(Command::ToggleCommandBar { mode: CommandBarMode::Extensions });
+    assert_eq!(h.ui().command_bar.unwrap().mode, CommandBarMode::Extensions);
+    h.apply(Command::ToggleCommandBar { mode: CommandBarMode::Extensions });
+    assert!(h.ui().command_bar.is_none());
+    // A button (`OpenCommandBar`) always opens.
+    h.apply(Command::OpenCommandBar { mode: CommandBarMode::NewTab, split_side: None });
+    h.apply(Command::OpenCommandBar { mode: CommandBarMode::NewTab, split_side: None });
+    assert!(h.ui().command_bar.is_some());
+    h.apply(Command::CloseCommandBar { seq: None });
+
+    // Ctrl+F, Ctrl+F.
+    h.apply(Command::ToggleFind);
+    assert_eq!(h.ui().find.unwrap().tab, a);
+    let fx = h.apply(Command::ToggleFind);
+    assert!(h.ui().find.is_none());
+    assert!(has(&fx, |e| matches!(e, Effect::StopFinding { tab } if *tab == a)), "{fx:?}");
+    // A find bar left open on another tab is re-targeted, not closed.
+    h.apply(Command::ToggleFind);
+    let b = h.open("https://b.com/");
+    h.apply(Command::ToggleFind);
+    assert_eq!(h.ui().find.unwrap().tab, b);
+
+    // Ctrl+, shows Settings; Ctrl+, again closes that tab — and only when it is the one in front.
+    h.apply(Command::ToggleInternalPage { page: InternalPage::Settings });
+    let settings = h.focused().expect("the settings tab");
+    assert!(h.tab(settings).url.starts_with("sta://settings"));
+    h.apply(Command::ActivateItem { id: b });
+    h.apply(Command::ToggleInternalPage { page: InternalPage::Settings });
+    assert_eq!(h.focused(), Some(settings), "from another tab the key goes to the page, it does not close it");
+    h.apply(Command::ToggleInternalPage { page: InternalPage::Settings });
+    assert!(!h.today().contains(&settings), "{:?}", h.today());
+
+    // Ctrl+D, Ctrl+D: both directions say what happened.
+    h.apply(Command::ActivateItem { id: a });
+    h.apply(Command::TogglePin { id: None });
+    assert!(h.pinned().contains(&a));
+    assert_eq!(h.toast().map(|t| t.message), Some("Pinned".into()));
+    h.apply(Command::TogglePin { id: None });
+    assert!(h.today().contains(&a) && !h.pinned().contains(&a));
+    assert_eq!(h.toast().map(|t| t.message), Some("Unpinned".into()));
+}
+
 #[test]
 fn command_bar_modes_and_commit_semantics() {
     let mut h = Harness::new();

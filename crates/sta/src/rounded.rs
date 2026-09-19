@@ -780,6 +780,42 @@ pub fn card_root(spec: &CardSpec) -> Option<Panel> {
     clear_box(spec.orientation == Orientation::Columns, None, no_insets()).map(|(panel, _)| panel)
 }
 
+/// A transparent panel with `root` as its only child, which it can show a **slice** of: `root`
+/// keeps its full width and is placed `cut` DIP left of the panel ([`set_clip_cut`]), where Views
+/// clips it to the panel. That is how the floating sidebar slides in from outside the window without
+/// its page ever being resized (`overlays::layout_overlay`).
+pub fn clip_root(root: &Panel) -> Option<Panel> {
+    let mut delegate = ClearPanelDelegate::new(None);
+    let clip = panel_create(Some(&mut delegate))?;
+    clip.add_child_view(Some(&mut View::from(root)));
+    set_clip_cut(&clip, root, 0);
+    Some(clip)
+}
+
+/// Lays `root` out `cut` DIP wider than `clip` and that far to its left (0 = it fills the panel).
+///
+/// A box layout with a **negative left inset**: the layout's child area then starts `cut` DIP left
+/// of the panel and is that much wider, and the one flexed child gets all of it. Setting the child's
+/// bounds by hand does not survive — a panel without a layout manager fills itself with its child on
+/// the next layout pass (measured: the card came back as `[0, 0, clip width, h]` every step).
+///
+/// Only *replaces the layout manager*, which invalidates the panel's layout; the pass itself runs
+/// when the panel is resized (or on the caller's `layout()`).
+pub fn set_clip_cut(clip: &Panel, root: &Panel, cut: i32) {
+    let layout = clip.set_to_box_layout(Some(&BoxLayoutSettings {
+        horizontal: 1,
+        inside_border_insets: Insets { top: 0, left: -cut.max(0), bottom: 0, right: 0 },
+        cross_axis_alignment: AxisAlignment::STRETCH,
+        ..Default::default()
+    }));
+    if let Some(layout) = layout {
+        layout.set_flex_for_view(Some(&mut View::from(root)), 1);
+    }
+    // No `layout()` here: the caller resizes the panel next, and the cut and the width only make
+    // sense together. Laying out in between gave the card one pass at the old width with the new
+    // cut — a page resize per step, which is exactly what the clip exists to avoid.
+}
+
 /// Builds the card's views into `root` (from [`card_root`]).
 pub fn build_card(root: &Panel, spec: CardSpec) -> Option<Card> {
     let started = std::time::Instant::now();

@@ -29,13 +29,22 @@ git tag v0.2.0 → .github/workflows/release.yml → draft release (archives + l
    reporting the old version for local builds until you bump it.
 3. Watch the run. It builds `--release`, refuses a binary that still carries the MCP test surface
    (`tools/check-release-clean.mjs`), stages the payload (`tools/package-release.mjs stage`), zips
-   it, hashes it and leaves a **draft** release holding:
+   it, builds the installer from that same staged directory, hashes both and leaves a **draft**
+   release holding:
 
-   - `sta-<version>-windows-x64.zip` — the browser, its CEF runtime and `sta-mcp.exe`;
+   - `sta-<version>-windows-x64.msi` — **what a Windows user downloads**: one file, one
+     double-click (`tools/installer/sta.wxs`, WiX 5 — per-machine into `C:\Program Files\sta`, a
+     Start menu entry, a major upgrade of whatever version is installed, and it starts sta when it
+     is done);
+   - `sta-<version>-darwin-arm64.dmg` — **what a macOS user downloads**: `sta.app` beside an
+     Applications shortcut (`hdiutil`, UDZO);
+   - `sta-<version>-windows-x64.zip` — the same Windows payload with no installer (portable): the
+     browser, its CEF runtime and `sta-mcp.exe`;
    - `sta-<version>-darwin-arm64.zip` — `sta.app`, with the CEF framework, the helper apps and
-     `sta-mcp` inside it;
-   - `latest.json` — `{version, pubDate, notes, platforms: {"windows-x86_64": {…}, "darwin-aarch64":
-     {…}}}`, merged from the per-platform manifests each build job uploads.
+     `sta-mcp` inside it (what the macOS updater applies);
+   - `latest.json` — `{version, pubDate, notes, platforms: {"windows-x86_64": {…},
+     "windows-x86_64-msi": {…}, "darwin-aarch64": {…}}}`, merged from the per-platform manifests
+     each build job uploads. The `.dmg` is for people, not for the updater, and is not listed.
 4. Edit the draft's notes if the generated changelog needs it, then **publish** it. Nothing updates
    before that: `releases/latest/download/…` is served from published releases only, which is what
    makes the draft a safe place to look at a build first.
@@ -49,7 +58,15 @@ cargo build --release -p sta -p sta-mcp
 node tools/package-release.mjs stage --target-dir target/release --out dist
 # dist/sta-<version>-<platform>/ — start its sta.exe (or sta.app) to check it runs, then zip it
 # (on macOS use `ditto -c -k --keepParent`, which keeps the bundle's file modes)
+
+# the installer, from that same directory:
+dotnet tool install --global wix --version 5.0.2                       # Windows, once
+node tools/package-release.mjs msi --dir dist/sta-<version>-windows-x64   # → dist/…-windows-x64.msi
+node tools/package-release.mjs dmg --dir dist/sta-<version>-darwin-arm64  # → dist/…-darwin-arm64.dmg
 ```
+
+An .msi can be looked into without installing it: `msiexec /a <msi> /qn TARGETDIR=<dir>` unpacks it
+(the files land in `<dir>\PFiles64\sta`, and must match the staged directory file for file).
 
 ## 2. What the archive holds
 
@@ -69,8 +86,16 @@ something is missing rather than publishing an archive that cannot start.
 
 The UI (`ui/`) is embedded in the binary in release builds, so it is not a file in either archive.
 
-There is no installer and no code signature: unpack it anywhere and run `sta.exe`, or open
-`sta.app`. SmartScreen warns once on Windows; on macOS, Gatekeeper refuses a double-click on an
+**The installers.** The `.msi` installs per-machine under Program Files on purpose: password
+managers that pair with a desktop app check who is calling, and 1Password's "Add Browser" only
+takes a browser that is code signed *or* lives under `C:\Program Files` — sta is not signed. It
+writes `HKLM\Software\sta\InstallDir`, which is how a running sta knows it must update through
+the next `.msi` (§3), and its `UpgradeCode` must never change: that is what makes the next version
+an upgrade rather than a second copy. A double-click needs no answers — Windows' own progress box,
+one UAC prompt, then sta starts (`LaunchApp`; a silent `/qn` install starts nothing unless it
+passes `LAUNCHAPP=1`). The `.dmg` is a drag-to-Applications image and nothing more.
+
+There is no code signature: SmartScreen warns once on Windows; on macOS, Gatekeeper refuses a double-click on an
 unsigned, quarantined app — open it from the right-click menu the first time. Adding signing (and
 notarization) later is a step in the workflow, not a change to any of this.
 
@@ -98,6 +123,16 @@ manifest, the version comparison and the status the UI sees).
   file that is still locked) and starts the installed `sta.exe` again. It runs from the staging
   directory, never from the directory it replaces — which is the only way a program can replace its
   own files on Windows. Its log is `%LOCALAPPDATA%\sta\updates\apply.log`.
+- **An .msi install takes another road from Download on.** Program Files is not writable for sta,
+  so a copy whose directory matches `HKLM\Software\sta\InstallDir` (`update::package`) downloads
+  `platforms["windows-x86_64-msi"]` instead — same trust rule, same hash check, nothing unpacked —
+  and "Restart to update" runs `msiexec /i <msi> /passive /norestart LAUNCHAPP=1` and quits. Windows
+  Installer asks for elevation itself, replaces the old version as a major upgrade once sta's files
+  are free, and starts the new `sta.exe` as the user. Declining the UAC prompt leaves the old
+  version installed (start it again; the update is offered again).
+- **A portable copy that cannot write to its own directory** (a `.zip` unpacked into Program Files
+  by hand) is told so — "install the new version with the .msi" — instead of being sent through a
+  copy that must fail and an update that is offered for ever.
 - **Clean up** — the next start deletes the staging directories (`update::clean_staging`).
 
 Switches: `STA_NO_UPDATE_CHECK=1` turns the whole thing off for a run, and it never runs at all

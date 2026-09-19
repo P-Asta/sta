@@ -17,9 +17,11 @@ Anything here that is not true is a bug; the e2e suites in §5 are what keeps mo
 ## 1. What works
 
 ### Window and sidebar
-A frameless window with a vertical sidebar, a top bar and the page. The sidebar is resizable and
-hides with Ctrl+S; while hidden, resting the pointer at the window's left edge floats it over the
-page, and it hides again when the pointer leaves. Rounded content corners and a radius token scale.
+A frameless window with a vertical sidebar, a top bar and the page. The sidebar is resizable — drag
+the gutter between it and the page (double-click resets it), or use **Settings › Appearance ›
+Sidebar width**, 200–440 px — and hides with Ctrl+S; while hidden, resting the pointer at the
+window's left edge slides it in over the page, and it slides out again when the pointer leaves. The
+card is moved and clipped while it slides, never resized, so the slide costs the page nothing. Rounded content corners and a radius token scale.
 Light, dark and system appearance, applied to every surface *and* to the native window frame.
 
 ### Spaces, tabs and the Arc lifecycle
@@ -90,12 +92,17 @@ fades without movement), a switch per group and a switch per key, and Reset to d
 key off while its animation is playing settles that animation immediately.
 
 ### Updates
-A `vX.Y.Z` tag builds a release archive and leaves a **draft** GitHub release
-(`.github/workflows/release.yml`); publishing that draft is what offers it to anybody. A running
-sta checks ~8 s after it starts, toasts "sta X is available", and Settings › About downloads it
-(SHA-256 checked before anything is unpacked) and applies it on the next restart. Windows x64 only,
-portable archive, no installer and no code signature yet — SmartScreen warns once. The whole thing
-is off under the e2e harness and with `STA_NO_UPDATE_CHECK=1`. See `docs/RELEASING.md`.
+A `vX.Y.Z` tag builds a release and leaves a **draft** GitHub release
+(`.github/workflows/release.yml`) with one-file installers — **`.msi`** for Windows (Program Files,
+Start menu entry, upgrades in place, starts sta when done) and **`.dmg`** for macOS — next to the
+portable `.zip` archives; publishing that draft is what offers it to anybody. A running sta checks
+~8 s after it starts, toasts "sta X is available", and Settings › About downloads it (SHA-256
+checked before anything is used) and applies it on the next restart: an installed copy through the
+new `.msi` (one elevation prompt), a portable or macOS copy by swapping its files. No code
+signature yet — SmartScreen warns once. The .msi has been built and unpacked here, **not installed**
+(that needs the release to exist), and the .dmg step has only ever run on paper — the first tagged
+build is its test. The whole thing is off under the e2e harness and with `STA_NO_UPDATE_CHECK=1`.
+See `docs/RELEASING.md`.
 
 ### Keyboard
 
@@ -128,6 +135,11 @@ is off under the e2e harness and with `STA_NO_UPDATE_CHECK=1`. See `docs/RELEASI
 | F11, Alt+Shift+F | Fullscreen |
 | F12 / Ctrl+Shift+I | DevTools (docked) / open, focus, close |
 
+**Every key that turns something on turns it off again.** Ctrl+T, Ctrl+L / Alt+D / F6 and Ctrl+E close
+the command bar they opened (a bar in *another* mode is switched to that mode instead), Ctrl+F closes
+the find bar of the tab in front, Ctrl+, and Ctrl+H close the Settings / History tab when it is the
+one in front, and Ctrl+D, Ctrl+S, Ctrl+J, Alt+F, F11 and F12 always were toggles. Buttons only open.
+
 **F2 renames**, but it is not an accelerator: the docked sidebar handles it in its own keyboard
 focus, so it does nothing while the sidebar is hidden or floating.
 
@@ -151,8 +163,13 @@ focus, so it does nothing while the sidebar is hidden or floating.
   keyboard hints. Nothing explains spaces, Today or Peek, and there is no way to bring bookmarks,
   history or passwords over from Chrome or Edge. (The one thing sta does inherit from Chrome
   automatically is the set of extensions other programs registered on the machine — §2 below.)
-- **No autofill UI** of any kind, and password managers that pair with a desktop app (1Password)
-  refuse sta.
+- **No autofill UI** of any kind. Password managers that pair with a desktop app check who is
+  calling: **1Password** refuses an unknown browser until you add it in the 1Password app —
+  Settings › Browser › **Add Browser** → `sta.exe`. 1Password only offers that for a browser that
+  is code signed *or* installed under `C:\Program Files` (sta is not signed, so install it there).
+  Until then "Unlock 1Password" in the extension does nothing at all; the other way round is the
+  extension's own Settings › General › turn off "Integrate with 1Password app" and sign in to the
+  extension directly. Not verified against a real 1Password account.
 - **One window, one profile.** No second window, no profiles, no incognito.
 - **No split divider dragging** (fractions are equalised, or set by adding and removing panes).
 - **No favicon cache** for `http:` sites.
@@ -185,7 +202,13 @@ no view of sta's tabs, so:
   extension asks for `tabs`/`activeTab`, and a popup that renders nothing at all is replaced after
   three seconds by "This popup doesn't work in sta yet" with a link to the options page;
 - **removing an extension uses Chrome's own "Remove …?" dialog** (Chromium skips that confirmation
-  only for an extension removing itself). sta adds no dialog of its own;
+  only for an extension removing itself). sta adds no dialog of its own, centers that one over its
+  window and owns it, so it stays above sta. (In 0.1.3 the dialog was invisible — it inherited the
+  cloak of the hidden window that created it — and Remove looked dead.);
+- **a full disk fails an install as "Could not unzip extension"** (or "Package is invalid …
+  Internal error while parsing rules"): Chromium unpacks into the profile, and AdBlock alone is
+  340 MB unpacked. sta cannot see that error, so it warns about the cause instead — a toast when a
+  Web Store page opens with under 1 GB free on the profile's volume (Windows only);
 - extension **popup windows** (`windows.create({type:'popup'})`) and sign-in flows
   (`identity.launchWebAuthFlow`) stay ordinary Chromium windows, with sta's caption colours, icon
   and "… - sta" title: their pages need a window of their own. Such a window therefore looks like

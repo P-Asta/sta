@@ -26,8 +26,12 @@
 //! **Removing** an extension is the one operation the user answers: Chromium always shows its own
 //! "Remove …?" dialog for it (`showConfirmDialog: false` is honoured only for an extension removing
 //! itself, and `developerPrivate` has no uninstall at all in 152), so that dialog *is* the
-//! confirmation — sta asks nothing of its own, the window stays cloaked, and only its dialog is left
-//! visible and answerable ([`hw::allow_dialogs`], cleared when the operation ends).
+//! confirmation — sta asks nothing of its own, the window is never shown, and only its dialog is left
+//! visible and answerable ([`hw::allow_dialogs`], cleared when the operation ends). Two things make
+//! that dialog something a person can actually answer, and both were missing at first (0.1.3 showed
+//! nothing at all and "Remove" looked dead): the backend window is **un-cloaked** for as long as it
+//! waits for the dialog, because DWM hands a cloak down to every owned window, and the dialog is
+//! **re-owned by sta's main window**, so it stays above sta instead of dropping behind it.
 //!
 //! Public API:
 //! - `pub fn run(id: String, op: ExtensionOp)` — `Effect::ExtensionOp`
@@ -133,8 +137,8 @@ fn script(id: &str, op: ExtensionOp) -> String {
         // extension uninstalling *itself*, and `developerPrivate` has no uninstall at all in 152
         // (measured: gate S7, the API listing) — so **every** way to remove another extension ends in
         // Chromium's "Remove …?" dialog. sta lets that dialog be the confirmation (deviation 2 in
-        // `gates-p3.md`): the backend window stays cloaked, only its dialog is shown, placed over
-        // sta's window, and a user who cancels gets no error.
+        // `gates-p3.md`): the backend window is never shown, only its dialog is, owned by and placed
+        // over sta's window, and a user who cancels gets no error.
         ExtensionOp::Uninstall => String::from(
             r#"await new Promise((res, rej) => chrome.management.uninstall(id, {showConfirmDialog: true}, () => chrome.runtime.lastError ? rej(new Error(chrome.runtime.lastError.message)) : res()));
   return {done: true};"#,
@@ -212,10 +216,19 @@ fn op_timeout(op: ExtensionOp) -> i64 {
     if op == ExtensionOp::Uninstall { UNINSTALL_TIMEOUT_MS } else { OP_TIMEOUT_MS }
 }
 
-/// Chromium's "Remove …?" dialog appeared: center it over sta's window, where the user is looking.
+/// Chromium's "Remove …?" dialog appeared: hand it to sta's window and center it there, where the
+/// user is looking.
+///
+/// The dialog is created owned by the backend window, which is never on screen. Left like that it
+/// would drop *behind* sta the first time the user clicked sta's window — a confirmation nobody can
+/// find, holding the one operation slot for two minutes — so sta's main window becomes its owner: it
+/// stays above sta and is minimized with it. (That it is drawn at all is `hw::allow_dialogs`' doing.)
 fn on_dialog_shown(hwnd: isize) {
     task::post_ui(move || {
         let main = window::hwnd_value();
+        if !hw::set_owner(hwnd, main) {
+            log_warn!("ext_backend: the remove dialog kept its hidden owner");
+        }
         let (Some(dialog), Some(area)) = (hw::window_rect(hwnd), hw::client_rect(main)) else { return };
         let (mut x, mut y) = (area[0] + (area[2] - dialog[2]) / 2, area[1] + (area[3] - dialog[3]) / 2);
         if let Some([wx, wy, ww, wh]) = hw::work_area(main) {
@@ -236,7 +249,9 @@ fn guard() {
     if finished {
         return;
     }
-    if hw::is_window(root) && hw::is_visible(root) && !hw::describe(root).cloaked {
+    // While a removal waits for its dialog the root is deliberately not cloaked (a cloaked owner hides
+    // the dialog too), so there "shown" alone is already too much.
+    if hw::is_window(root) && hw::is_visible(root) && (op == ExtensionOp::Uninstall || !hw::describe(root).cloaked) {
         // R-SEC-4: a window that became visible is re-hidden and the operation is abandoned — the
         // user must never be handed a Chrome settings window they did not ask for.
         stats(|s| s.aborted_visible += 1);
@@ -292,7 +307,9 @@ fn on_loaded(browser_id: i32, url: &str) {
         return;
     };
     // Removing an extension shows Chromium's own confirmation, owned by this window: it is left
-    // visible and answerable while the window itself stays cloaked (R-SEC-4 is about the *window*).
+    // visible and answerable while the window itself stays unshown (R-SEC-4 is about the *window*;
+    // `allow_dialogs` lifts its cloak, which the dialog would otherwise inherit, and `guard` aborts
+    // if the window is ever shown meanwhile).
     // The exemption is granted **here**, with the script, and not when the window is created: until
     // the page is loaded and asked to uninstall something there is no dialog to wait for, and an
     // exemption that covers the whole 120 s budget is an exemption for windows sta never asked for

@@ -133,7 +133,9 @@ per surface waiting right now (`{gen, key, browserId, floorMs, waitedMs}`), plus
 `ackTimeouts` (a page that never answered — **0** in a normal run), `cancels` (a show during a linger),
 `earlyHides` (a hide with no page to ask at all — also 0), `staleAcks`, `lastExitMs` and
 `slowestExitMs`. `floorOverrideMs` is what `debug.motion {floorMs}` raised the floor to, `null`
-normally. `sections` (at most 20 entries) keeps the
+normally. `lastSlide` is the floating sidebar's last finished slide: `{steps, ms, maxGapMs, stepMs}` —
+`maxGapMs` over ~32 means steps landed on every second timer tick again, which is what a slide that
+"drops frames" is. `sections` (at most 20 entries) keeps the
 answer small — **use browser-side `at` for timing assertions**, never a wall clock around the call.
 
 `devtools` is the docked DevTools of each tab: the frontend browser, the inspected browser, session
@@ -258,7 +260,7 @@ puts `win` / `capture` / `pixels` on the suite's own MCP session like everywhere
 ### `test_window`
 `hwnd`, position, size, `dpi`, `zoomed`, `iconic`, `thickFrame`, `enabled`, `foreground`, class,
 title and the held modifier keys. With `all`, every top-level window of this process (class, title,
-owner, visible, hidden, enabled, bounds and the two style words `style` / `exStyle` as numbers) —
+owner, visible, hidden, cloaked, enabled, bounds and the two style words `style` / `exStyle` as numbers) —
 dialogs and Chrome-created windows included. `lib.mjs`'s `ownedWindows()` filters that list down to
 the visible windows sta's main window **owns**, which is how a suite finds Chromium's own dialogs:
 they are `Chrome_WidgetWin_1` views widgets, not `#32770`, so `dialogs()` never sees them, and the

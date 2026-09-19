@@ -137,6 +137,9 @@ pub mod hidden_windows {
     pub fn set_sta_owned_listener(_f: fn(isize)) {}
     pub fn allow_dialogs(_root: isize, _allow: bool) {}
     pub fn set_dialog_listener(_f: fn(isize)) {}
+    pub fn set_owner(_hwnd: isize, _owner: isize) -> bool {
+        false
+    }
     pub fn move_window(_hwnd: isize, _x: i32, _y: i32) -> bool {
         false
     }
@@ -217,6 +220,12 @@ mod fallback {
     }
     pub fn hold_lock_file(path: &std::path::Path) -> std::io::Result<std::fs::File> {
         std::fs::OpenOptions::new().write(true).create(true).truncate(true).open(path)
+    }
+    pub fn free_disk_bytes(_dir: &std::path::Path) -> Option<u64> {
+        None
+    }
+    pub fn msi_install_dir() -> Option<PathBuf> {
+        None
     }
     pub fn os_ui_languages() -> Vec<String> {
         Vec::new()

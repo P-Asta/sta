@@ -124,7 +124,9 @@ fn b(key: i32, mods: &str, high_priority: bool, command: Command) -> Binding {
 
 fn build_bindings() -> Vec<Binding> {
     use vk::*;
-    let open_bar = |mode| Command::OpenCommandBar { mode, split_side: None };
+    // The same shortcut again closes what it opened (`ToggleCommandBar`, `ToggleFind`,
+    // `ToggleInternalPage`): every key that turns something on turns it off too.
+    let open_bar = |mode| Command::ToggleCommandBar { mode };
     let mut t = vec![
         // ---- high priority (reserved)
         b(letter('T'), "C", true, open_bar(CommandBarMode::NewTab)),
@@ -166,7 +168,7 @@ fn build_bindings() -> Vec<Binding> {
         b(letter('R'), "CS", false, Command::Reload { tab: None, ignore_cache: true }),
         b(F5, "C", false, Command::Reload { tab: None, ignore_cache: true }),
         b(F5, "S", false, Command::Reload { tab: None, ignore_cache: true }),
-        b(letter('F'), "C", false, Command::OpenFind),
+        b(letter('F'), "C", false, Command::ToggleFind),
         b(F3, "", false, Command::FindNext { forward: true }),
         b(F3, "S", false, Command::FindNext { forward: false }),
         b(OEM_PLUS, "C", false, Command::Zoom { direction: ZoomDirection::In }),
@@ -178,10 +180,10 @@ fn build_bindings() -> Vec<Binding> {
         b(letter('P'), "C", false, Command::Print),
         b(letter('U'), "C", false, Command::ViewSource),
         b(letter('J'), "C", false, Command::ToggleSidebarPanel { panel: SidebarPanel::Downloads }),
-        b(OEM_COMMA, "C", false, Command::OpenInternalPage { page: InternalPage::Settings }),
+        b(OEM_COMMA, "C", false, Command::ToggleInternalPage { page: InternalPage::Settings }),
         // History is ⌘Y on macOS, as in Safari and Chrome: ⌘H is Hide, which belongs to the OS (and
         // to the app menu, platform/mac.rs).
-        b(if cfg!(target_os = "macos") { letter('Y') } else { letter('H') }, "C", false, Command::OpenInternalPage { page: InternalPage::History }),
+        b(if cfg!(target_os = "macos") { letter('Y') } else { letter('H') }, "C", false, Command::ToggleInternalPage { page: InternalPage::History }),
         b(letter('O'), "C", false, Command::ExpandPeek { split: false }),
         b(letter('F'), "A", false, Command::ToggleSidebarPanel { panel: SidebarPanel::AppMenu }),
         // Ctrl+E is page first (D5a): Notion, vscode.dev and DevTools keep their own Ctrl+E, and the

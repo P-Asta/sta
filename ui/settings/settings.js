@@ -303,6 +303,35 @@ function SuggestionsSetting({ settings, engine }) {
   <//>`;
 }
 
+// ------------------------------------------------------------------------------------ default browser
+
+function DefaultBrowserSetting() {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [opened, setOpened] = useState(false);
+  const open = async () => {
+    if (busy) return;
+    setBusy(true);
+    setError('');
+    setOpened(false);
+    try {
+      await invoke('app.setDefaultBrowser');
+      setOpened(true);
+    } catch (e) {
+      setError(e.message || 'Could not open Windows Default Apps. Please try again.');
+    } finally {
+      setBusy(false);
+    }
+  };
+  return html`<${Setting} label="Default browser" desc=${html`
+    <span>Open Windows Default Apps to choose sta for web links and HTML files.</span>
+    ${error && html`<span class="set-note" role="alert">${error}</span>`}
+    ${opened && html`<span class="set-note" role="status">Choose sta and select Set default in Windows Settings.</span>`}
+  `}>
+    <${Button} size="sm" disabled=${busy} onClick=${open}>${busy ? 'Opening…' : 'Set as default browser'}<//>
+  <//>`;
+}
+
 // ------------------------------------------------------------------------------------ downloads
 
 function DownloadsSection({ settings, info }) {
@@ -515,6 +544,7 @@ function Settings({ state }) {
 
     <main class="set-main">
       <${Section} id="general" title="General">
+        ${info.data?.canSetDefaultBrowser && html`<${DefaultBrowserSetting} />`}
         <${Setting} label="On startup" desc="What sta shows when it starts. Your sidebar is always restored.">
           <div class="set-select is-wide">
             <${Select} value=${settings.startup} options=${STARTUP_OPTIONS} ariaLabel="On startup" onChange=${(v) => update({ startup: v })} />

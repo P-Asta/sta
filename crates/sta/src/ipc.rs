@@ -444,6 +444,23 @@ fn handle_request(browser_id: i32, cmd: &str, payload: Value, callback: &Cb) -> 
             Reply::Deferred
         }
         "app.info" => Reply::value(&app_info()),
+        #[cfg(windows)]
+        "app.setDefaultBrowser" => {
+            let cb = callback.clone();
+            let spawned = std::thread::Builder::new().name("sta-default-browser".into()).spawn(move || {
+                let result = platform::open_default_browser_settings();
+                task::post_ui_from_any_thread(move || match result {
+                    Ok(()) => {
+                        if let Ok(cb) = cb.lock() { cb.success_str("null"); }
+                    }
+                    Err(e) => fail(&cb, 500, &format!("Cannot set up sta as a browser: {e}")),
+                });
+            });
+            match spawned {
+                Ok(_) => Reply::Deferred,
+                Err(e) => Reply::Err(500, format!("Cannot open default browser settings: {e}")),
+            }
+        }
         c if c.starts_with("agent.") => crate::automation::ui::handle_request(browser_id, c, payload, callback),
         #[cfg(debug_assertions)]
         c if c.starts_with("debug.") => crate::debug::handle(browser_id, c, payload, callback),
@@ -513,5 +530,6 @@ fn app_info() -> Value {
         "chromiumVersion": chromium_version,
         "dataDir": data_dir,
         "downloadDir": download_dir,
+        "canSetDefaultBrowser": cfg!(windows),
     })
 }

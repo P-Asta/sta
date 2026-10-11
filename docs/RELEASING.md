@@ -68,6 +68,15 @@ node tools/package-release.mjs dmg --dir dist/sta-<version>-darwin-arm64  # → 
 An .msi can be looked into without installing it: `msiexec /a <msi> /qn TARGETDIR=<dir>` unpacks it
 (the files land in `<dir>\PFiles64\sta`, and must match the staged directory file for file).
 
+On Windows, the MSI registers sta in Default Apps for HTTP, HTTPS, `.htm`, and `.html`; uninstall
+removes those MSI-owned entries. Settings → General → **Set as default browser** opens Windows
+Default Apps, where the user makes the final choice. On older Windows versions it may open the
+general Default Apps page instead of sta's page. A ZIP copy registers **sta Portable** for the
+current user when that button is pressed, using a separate ProgID so it cannot shadow the MSI.
+Keep the ZIP copy in its final location; if moved, press the button again from the new location.
+Neither path writes `UserChoice` or silently changes the default browser.
+Run `powershell -File tools/check-browser-registration.ps1` to check the MSI registry contract.
+
 ## 2. What the archive holds
 
 `tools/package-release.mjs` knows what each platform's archive holds (`PAYLOAD`), and **fails** when

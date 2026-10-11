@@ -43,6 +43,13 @@
 use std::path::PathBuf;
 
 #[cfg(windows)]
+mod browser_registration;
+#[cfg(windows)]
+mod default_browser;
+#[cfg(windows)]
+pub use default_browser::open_default_browser_settings;
+
+#[cfg(windows)]
 mod win;
 
 #[cfg(windows)]

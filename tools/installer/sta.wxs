@@ -42,6 +42,7 @@
       <ComponentGroupRef Id="Payload" />
       <ComponentRef Id="Browser" />
       <ComponentRef Id="InstallMarker" />
+      <ComponentRef Id="BrowserRegistration" />
     </Feature>
 
     <!-- Everything `stage` staged, harvested at build time; sta.exe is authored by hand below
@@ -58,6 +59,47 @@
         <Shortcut Id="StartMenuShortcut" Directory="ProgramMenuFolder" Name="sta" Description="sta browser"
                   WorkingDirectory="INSTALLFOLDER" Icon="StaIcon" Advertise="yes" />
       </File>
+    </Component>
+
+    <!-- Advertise capabilities, never write UserChoice or take over a default association.
+         MSI owns these keys, including cleanup on uninstall. Quote both the executable and %1;
+         The option terminator keeps an incoming argument from becoming a Chromium switch. -->
+    <Component Id="BrowserRegistration" Directory="INSTALLFOLDER" Guid="A5E6C328-81C0-4F36-B9C4-3A1861DC3F47" Bitness="always64">
+      <RegistryKey Root="HKLM" Key="Software\RegisteredApplications">
+        <RegistryValue Name="sta" Type="string" Value="Software\Clients\StartMenuInternet\sta\Capabilities" KeyPath="yes" />
+      </RegistryKey>
+      <RegistryKey Root="HKLM" Key="Software\Clients\StartMenuInternet\sta">
+        <RegistryValue Type="string" Value="sta" />
+      </RegistryKey>
+      <RegistryKey Root="HKLM" Key="Software\Clients\StartMenuInternet\sta\DefaultIcon">
+        <RegistryValue Type="string" Value="&quot;[#StaExe]&quot;,0" />
+      </RegistryKey>
+      <RegistryKey Root="HKLM" Key="Software\Clients\StartMenuInternet\sta\shell\open\command">
+        <RegistryValue Type="string" Value="&quot;[#StaExe]&quot;" />
+      </RegistryKey>
+      <RegistryKey Root="HKLM" Key="Software\Clients\StartMenuInternet\sta\Capabilities">
+        <RegistryValue Name="ApplicationName" Type="string" Value="sta" />
+        <RegistryValue Name="ApplicationDescription" Type="string" Value="Browse the web with sta" />
+        <RegistryValue Name="ApplicationIcon" Type="string" Value="&quot;[#StaExe]&quot;,0" />
+      </RegistryKey>
+      <RegistryKey Root="HKLM" Key="Software\Clients\StartMenuInternet\sta\Capabilities\URLAssociations">
+        <RegistryValue Name="http" Type="string" Value="staHTML" />
+        <RegistryValue Name="https" Type="string" Value="staHTML" />
+      </RegistryKey>
+      <RegistryKey Root="HKLM" Key="Software\Clients\StartMenuInternet\sta\Capabilities\FileAssociations">
+        <RegistryValue Name=".htm" Type="string" Value="staHTML" />
+        <RegistryValue Name=".html" Type="string" Value="staHTML" />
+      </RegistryKey>
+      <RegistryKey Root="HKLM" Key="Software\Classes\staHTML">
+        <RegistryValue Type="string" Value="sta HTML Document" />
+        <RegistryValue Name="URL Protocol" Type="string" Value="" />
+      </RegistryKey>
+      <RegistryKey Root="HKLM" Key="Software\Classes\staHTML\DefaultIcon">
+        <RegistryValue Type="string" Value="&quot;[#StaExe]&quot;,0" />
+      </RegistryKey>
+      <RegistryKey Root="HKLM" Key="Software\Classes\staHTML\shell\open\command">
+        <RegistryValue Type="string" Value="&quot;[#StaExe]&quot; -- &quot;%1&quot;" />
+      </RegistryKey>
     </Component>
 
     <Component Id="InstallMarker" Directory="INSTALLFOLDER" Guid="9C4A7D13-52E8-4F0B-B6A9-E1D7082C3B45">

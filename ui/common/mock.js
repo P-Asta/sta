@@ -757,7 +757,8 @@ const handlers = {
   'sidebar.setWidth': () => null,
   'sidebar.hoverLock': () => null,
   'dialog.pickFolder': () => 'C:\\Users\\you\\Documents\\Downloads',
-  'app.info': () => fixtures.appInfo,
+  'app.info': () => ({ ...fixtures.appInfo, canSetDefaultBrowser: /Win/i.test(globalThis.navigator?.userAgentData?.platform || globalThis.navigator?.platform || '') }),
+  'app.setDefaultBrowser': () => null,
   ...agentRequests(() => ctx.state),
 };
 

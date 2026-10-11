@@ -36,7 +36,6 @@ impl Image {
 
 // ----------------------------------------------------------------------------------- capture
 
-#[cfg(windows)]
 fn chunk(out: &mut Vec<u8>, kind: &[u8; 4], body: &[u8]) {
     out.extend_from_slice(&(body.len() as u32).to_be_bytes());
     out.extend_from_slice(kind);

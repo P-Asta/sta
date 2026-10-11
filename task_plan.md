@@ -1,5 +1,10 @@
 # STA Windows default browser
 
+## Follow-up: macOS PNG build failure
+- [x] Root cause: platform-independent write_png calls chunk, but chunk has a leftover Windows-only cfg.
+- [x] Reproduce a non-Windows compilation failure and remove the misplaced cfg.
+- [x] Run PNG tests and available project checks; macOS ARM64 release checks passed for the actual PNG module (with and without tests). Full macOS app build remains a CI check; Windows workspace retains the documented existing CDP test failure.
+
 - [x] Inspect installer, settings, IPC, and external launch handling.
 - [x] Add browser registration for MSI and explicit registration for portable builds.
 - [x] Add a Windows-only settings action opening Windows Default Apps.

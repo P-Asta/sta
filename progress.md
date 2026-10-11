@@ -1,5 +1,11 @@
 # Progress
 
+## macOS PNG follow-up
+- Removed only the incorrect Windows cfg from chunk in png.rs.
+- Existing PNG roundtrip, cropping, and upscaling tests: 3 passed on Windows.
+- Actual png.rs and its tests: aarch64-apple-darwin release cargo check passed in target/png-portability-check (same flate2 1.1.10). Full macOS application linking/runtime still requires macOS CI.
+- `cargo test --workspace --offline --no-fail-fast`: 463 passed, 1 ignored, 1 existing failure (automation::cdp::tests::only_allowlisted_methods_appear_in_automation_sources; CRLF scanner issue described below). Full Windows test compilation succeeded. No other code changed; Cargo.lock automatic version refresh restored.
+
 - Implementation complete: MSI registry, portable registry, trusted async app.setDefaultBrowser IPC, Windows-only Settings button, inline status/error/retry.
 - Test-first portable registry and MSI contract checks: failed without registration, passed after implementation.
 - Native Windows module compiled against windows-sys 0.61.2 (CEF-independent harness).
